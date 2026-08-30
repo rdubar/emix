@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "emix"
+name = "emix-shell"
 version = "0.2.0"
 description = "Historical computer personalities — CP/M, VMS, VM/CMS — over a modern Unix host"
 readme = "README.md"

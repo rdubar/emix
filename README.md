@@ -1,7 +1,7 @@
 # Emix
 
 [![CI](https://github.com/rdubar/emix/actions/workflows/ci.yml/badge.svg)](https://github.com/rdubar/emix/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/emix/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/emix-shell/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Emix lets a modern Unix machine pretend to be an older computer.
@@ -26,10 +26,13 @@ FILEMODE` — are what the engine exists to express.
 
 ## Install
 
-> **Not yet on PyPI.** Nothing has been published, so `uv tool install emix`
-> will not resolve. The name is currently unclaimed — not held — so it is
-> worth publishing early if you want it. Use one of the options below
-> meanwhile.
+> **Not yet released.** Nothing has been published to PyPI yet, so the
+> commands below that name `emix-shell` will not resolve until 0.2.0 ships.
+> Run from a checkout meanwhile.
+>
+> The distribution is called **`emix-shell`**; the command it installs is
+> **`emix`**. PyPI rejects the bare name `emix` as too similar to the
+> existing `emux`, `emx` and `emi` projects.
 
 Emix has no runtime dependencies beyond Python 3.10 or newer.
 
@@ -60,10 +63,13 @@ ssh pi 'uv tool install /tmp/emix-*.whl'
 **Once released**, and once the repository is public, these will work:
 
 ```sh
-uv tool install emix                              # from PyPI
-uv tool install git+https://github.com/rdubar/emix  # from source
-uvx emix cpm                                      # without installing
+uv tool install emix-shell                           # from PyPI
+uv tool install git+https://github.com/rdubar/emix   # from source
+uvx --from emix-shell emix cpm                       # without installing
 ```
+
+Note the `--from` in the `uvx` line: the distribution is `emix-shell` but the
+command is `emix`, so `uvx` needs telling which package provides it.
 
 If `uv` warns that `~/.local/bin` is not on your `PATH`, run
 `uv tool update-shell` and open a new terminal.

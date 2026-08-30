@@ -213,7 +213,7 @@ toml = [
 ]
 
 [[package]]
-name = "emix"
+name = "emix-shell"
 version = "0.2.0"
 source = { editable = "." }
 
