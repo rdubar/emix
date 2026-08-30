@@ -79,7 +79,7 @@ emix cpm -c "DIR *.TXT"                   # run one command and exit
 A CP/M session:
 
 ```text
-EMIX 0.2.0
+EMIX 0.2.1
 CP/M 2.2 PERSONALITY
 A: /Users/rdubar/dev/emix
 TYPE HELP FOR AVAILABLE COMMANDS.
@@ -199,7 +199,8 @@ file browsing today, on macOS and on a Raspberry Pi 5 — the case-sensitive
 filesystem there is the interesting case, and it caught a bug that macOS
 structurally could not.
 
-The [roadmap](ROADMAP.md) covers where it goes next, including whether Emix
+Release notes are in [CHANGELOG.md](CHANGELOG.md). The
+[roadmap](ROADMAP.md) covers where it goes next, including whether Emix
 should eventually execute genuine CP/M `.COM` binaries in a sandbox — and why
 that turns out to be less frightening than it sounds.
 

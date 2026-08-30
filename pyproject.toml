@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "emix-shell"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Historical computer personalities — CP/M, VMS, VM/CMS — over a modern Unix host"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,6 +44,9 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+
+[tool.hatch.version]
+path = "src/emix/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/emix"]
