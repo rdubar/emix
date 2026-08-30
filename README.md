@@ -1,7 +1,8 @@
 # Emix
 
+[![PyPI](https://img.shields.io/pypi/v/emix-shell)](https://pypi.org/project/emix-shell/)
 [![CI](https://github.com/rdubar/emix/actions/workflows/ci.yml/badge.svg)](https://github.com/rdubar/emix/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/emix-shell/)
+[![Python](https://img.shields.io/pypi/pyversions/emix-shell)](https://pypi.org/project/emix-shell/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Emix lets a modern Unix machine pretend to be an older computer.
@@ -26,53 +27,40 @@ FILEMODE` — are what the engine exists to express.
 
 ## Install
 
-> **Not yet released.** Nothing has been published to PyPI yet, so the
-> commands below that name `emix-shell` will not resolve until 0.2.0 ships.
-> Run from a checkout meanwhile.
->
-> The distribution is called **`emix-shell`**; the command it installs is
-> **`emix`**. PyPI rejects the bare name `emix` as too similar to the
-> existing `emux`, `emx` and `emi` projects.
+```sh
+uv tool install emix-shell     # or: pipx install emix-shell
+emix cpm
+```
 
-Emix has no runtime dependencies beyond Python 3.10 or newer.
+To try it without installing anything:
 
-**Run from a checkout, with no install at all:**
+```sh
+uvx --from emix-shell emix cpm
+```
+
+The distribution is **`emix-shell`** but the command is **`emix`**, which is
+why `uvx` needs `--from`. PyPI rejects the bare name `emix` as too similar to
+the existing `emux`, `emx` and `emi` projects.
+
+Emix has no runtime dependencies beyond Python 3.10 or newer. If `uv` warns
+that `~/.local/bin` is not on your `PATH`, run `uv tool update-shell` and open
+a new terminal.
+
+### From source
+
+Running from a checkout needs no install step at all:
 
 ```sh
 git clone https://github.com/rdubar/emix && cd emix
 ./emix cpm
 ```
 
-**Install it as a command, from a checkout:**
+or install the working tree, or the repository directly:
 
 ```sh
-uv tool install .        # or: pipx install .
-emix cpm
+uv tool install .
+uv tool install git+https://github.com/rdubar/emix
 ```
-
-**Install on another machine** — build a wheel and copy it across. The wheel
-is pure Python, so one build serves x86-64 and Apple silicon and Raspberry Pi
-alike:
-
-```sh
-uv build
-scp dist/emix-*.whl pi:/tmp/
-ssh pi 'uv tool install /tmp/emix-*.whl'
-```
-
-**Once released**, and once the repository is public, these will work:
-
-```sh
-uv tool install emix-shell                           # from PyPI
-uv tool install git+https://github.com/rdubar/emix   # from source
-uvx --from emix-shell emix cpm                       # without installing
-```
-
-Note the `--from` in the `uvx` line: the distribution is `emix-shell` but the
-command is `emix`, so `uvx` needs telling which package provides it.
-
-If `uv` warns that `~/.local/bin` is not on your `PATH`, run
-`uv tool update-shell` and open a new terminal.
 
 ## Use
 
@@ -115,10 +103,10 @@ $ DIRECTORY/SIZE
 
 Directory DKA0:[000000]
 
-README.MD;1                     6
-ROADMAP.MD;1                    9
+README.MD;1                    15
+ROADMAP.MD;1                   20
 
-Total of 2 files, 15 blocks.
+Total of 2 files, 35 blocks.
 
 $ DELETE README.MD
 %DELETE-W-NOVER, explicit version number required
@@ -184,7 +172,7 @@ project, and the reason for everything above.
 
 ```sh
 uv sync           # create the environment
-uv run pytest     # 62 tests
+uv run pytest     # 78 tests
 uv run ruff check . && uv run ruff format --check .
 uv run mypy       # strict
 ```
@@ -206,11 +194,13 @@ class handles parsing, dispatch, confirmation, history and errors.
 
 ## Status
 
-Emix is an early experiment, version 0.2, not yet released. It is useful for
-real file browsing today, and is tested on macOS and on a Raspberry Pi 5 — the
-case-sensitive filesystem there is the interesting case. The [roadmap](ROADMAP.md) covers where it goes next, including the
-question of whether it should eventually execute genuine CP/M `.COM` binaries
-in a sandbox — and why the answer turns out to be less frightening than it
-sounds.
+Emix is an early experiment. Version 0.2 is on PyPI and is useful for real
+file browsing today, on macOS and on a Raspberry Pi 5 — the case-sensitive
+filesystem there is the interesting case, and it caught a bug that macOS
+structurally could not.
+
+The [roadmap](ROADMAP.md) covers where it goes next, including whether Emix
+should eventually execute genuine CP/M `.COM` binaries in a sandbox — and why
+that turns out to be less frightening than it sounds.
 
 MIT licensed.
