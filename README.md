@@ -1,5 +1,9 @@
 # Emix
 
+[![CI](https://github.com/rdubar/emix/actions/workflows/ci.yml/badge.svg)](https://github.com/rdubar/emix/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/emix/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 Emix lets a modern Unix machine pretend to be an older computer.
 
 It is not a CPU emulator and it does not run historical binaries. It presents
