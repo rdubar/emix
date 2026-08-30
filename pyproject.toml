@@ -1,24 +1,85 @@
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
-name = "emix-shell"
-version = "0.1.0"
-description = "Retro computer personalities backed by a modern Unix host"
+name = "emix"
+version = "0.2.0"
+description = "Historical computer personalities — CP/M, VMS, VM/CMS — over a modern Unix host"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Roger Dubar" }]
+keywords = ["cpm", "vms", "dcl", "cms", "retrocomputing", "shell", "emulation"]
 classifiers = [
+  "Development Status :: 3 - Alpha",
   "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
-  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: System :: Shells",
+  "Topic :: System :: Emulators",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/rdubar/emix"
+Repository = "https://github.com/rdubar/emix"
+Issues = "https://github.com/rdubar/emix/issues"
 
 [project.scripts]
 emix = "emix.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/emix"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "C4", "SIM", "RUF"]
+ignore = [
+  "S404",  # subprocess is the point: Emix runs host programs on request
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # assert is how pytest works
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["emix"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/emix"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[tool.coverage.run]
+source = ["src/emix"]

@@ -1,0 +1,20 @@
+name: Release
+
+# Publishes to PyPI via Trusted Publishing, so no API token is stored.
+# Configure the publisher once at https://pypi.org/manage/account/publishing/
+#   project: emix   owner: rdubar   repo: emix   workflow: release.yml
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - run: uv publish --trusted-publishing always
