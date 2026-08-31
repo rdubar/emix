@@ -9,7 +9,7 @@ first line
 second line
 Ready; T=C/C HH:MM:SS
 LABEL  VDEV M  STAT   CYL TYPE BLKSZ   FILES  BLKS USED-(%)
-EMIXA 019A A  R/W    500 3390  4096       3 NNNNNNNN- 81
+EMIXA 019A A  R/W    500 3390  4096       3 NNNNNNNN- NN
 Ready; T=C/C HH:MM:SS
 DMSxxx002E File 'NOSUCH.TXT' not found
 Ready(00028); T=C/C HH:MM:SS

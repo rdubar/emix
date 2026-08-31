@@ -34,9 +34,11 @@ _VOLATILE = [
     (re.compile(r"EMIX \d+\.\d+\.\d+", re.IGNORECASE), "EMIX X.Y.Z"),
     (re.compile(r"Emix \d+\.\d+\.\d+"), "Emix X.Y.Z"),
     (re.compile(r"SPACE: [\d,]+K"), "SPACE: NK"),
-    # CMS QUERY DISK reports blocks used on the real host volume. Anchored to
-    # that line, because VMS's [000000] is a constant and must survive.
-    (re.compile(r"(R/W .*?\s)\d+(-\s*\d+)"), r"\1NNNNNNNN\2"),
+    # CMS QUERY DISK reports the real host volume: both the block count and
+    # the percentage used vary by machine, which is how this transcript passed
+    # locally and failed on CI. Anchored to that line, because VMS's [000000]
+    # is a constant and must survive.
+    (re.compile(r"(R/W .*?\s)\d+-\s*\d+"), r"\1NNNNNNNN- NN"),
 ]
 
 
@@ -97,3 +99,32 @@ def test_a_whole_session_matches_its_transcript(key, drive_root, request):
 def test_a_transcript_carries_no_emix_assistance(key, drive_root):
     """Strict mode is the baseline, so a golden session is period-only."""
     assert "Emix:" not in play(key, drive_root, SCRIPTS[key])
+
+
+# -- the normaliser itself ----------------------------------------------
+
+
+def test_machine_dependent_values_normalise_to_the_same_text(tmp_path):
+    """A transcript that passes here and fails on CI is worse than no test.
+
+    CMS QUERY DISK reports the real host volume: both the block count and the
+    percentage used differ between machines, which is exactly how the first
+    version of this suite passed locally and failed in CI.
+    """
+    here = "EMIXA 019A A  R/W    500 3390  4096       3 97132541- 81\n"
+    elsewhere = "EMIXA 019A A  R/W    500 3390  4096       3 1204- 41\n"
+
+    assert normalise(here, tmp_path) == normalise(elsewhere, tmp_path)
+
+
+def test_a_constant_that_looks_like_a_number_is_left_alone(tmp_path):
+    """VMS's [000000] is part of the directory syntax, not a measurement."""
+    assert "[000000]" in normalise("Directory DKA0:[000000]\n", tmp_path)
+
+
+def test_clocks_and_versions_are_normalised(tmp_path):
+    rendered = normalise("EMIX 1.2.3 at 09:41:07 on 31-Aug-2026\n", tmp_path)
+
+    assert "1.2.3" not in rendered
+    assert "09:41:07" not in rendered
+    assert "31-Aug-2026" not in rendered
