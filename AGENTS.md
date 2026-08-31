@@ -52,8 +52,13 @@ docs/               ROADMAP.md, APPLICATIONS.md, IDEAS.md
 4. **The manifest is written before a guest launches.** It is the only
    recovery record if Emix dies mid-session.
 5. **Content digests, never mtimes**, decide what a guest changed.
-6. **Commit is all-or-nothing** and refuses to overwrite a host file that
-   changed underneath the session.
+6. **Commit is all-or-nothing**, and refuses to overwrite a host file it
+   *observes* has changed underneath the session — checked at preflight and
+   again immediately before each write. This is best-effort detection, not
+   exclusion: a write landing inside the final handoff is still lost. Never
+   restate it as a guarantee; `docs/APPLICATIONS.md` holds the exact contract.
+   A failed commit never claims an undo it did not perform, and its workspace
+   is always kept.
 7. **Tests never require a third-party binary.** Use `FakeBackend`.
 8. **Assistance never alters authentic output.** The period response prints
    first and verbatim; hints go below it under the `Emix:` marker. A test

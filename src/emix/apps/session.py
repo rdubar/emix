@@ -313,7 +313,7 @@ class DocumentSession:
         portable filesystem offers a primitive that does. So this is a small
         transaction written by hand:
 
-        1. refuse outright if anything conflicts, before touching the host;
+        1. refuse if anything is *seen* to conflict, before touching the host;
         2. for each target in turn, copy the file about to be overwritten into
            the session, check that copy still matches what step 1 saw, and
            only then replace it;

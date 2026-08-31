@@ -376,3 +376,27 @@ def test_cpm_save_says_why_it_cannot_exist(root):
     rendered = run(shell_for("cpm", root, strict=False), "SAVE 1 SNAP.COM")
 
     assert "NO TPA" in rendered.upper()
+
+
+def test_explain_describes_a_line_that_could_not_even_be_parsed(root):
+    """I5: the record has to exist before parsing, because parsing can fail."""
+    rendered = run(shell_for("cpm", root, strict=False), 'TYPE "unterminated', "EXPLAIN")
+
+    assert "You typed: TYPE" in rendered
+    assert "Nothing has run yet" not in rendered
+
+
+def test_a_parser_error_after_a_meta_command_still_explains_itself(root):
+    """The sequence the review used: a failure, a meta command, then a parse error."""
+    rendered = run(
+        shell_for("cpm", root, strict=False), "NOPE", "STRICT", 'TYPE "unterminated', "EXPLAIN"
+    )
+
+    assert "You typed: TYPE" in rendered
+    assert "You typed: NOPE" not in rendered
+
+
+def test_a_parser_error_as_the_very_first_command_explains_itself(root):
+    rendered = run(shell_for("cpm", root, strict=False), 'TYPE "unterminated', "EXPLAIN")
+
+    assert "Nothing has run yet" not in rendered

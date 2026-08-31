@@ -24,7 +24,7 @@ from emix import __version__
 from emix.assist import Concept
 from emix.errors import Code, EmixError
 from emix.host import case_collisions
-from emix.shell import Invocation, Shell, verb
+from emix.shell import STOP, Invocation, Outcome, Shell, verb
 
 _MESSAGES = {
     Code.NO_FILE: "DMSxxx002E File '{subject}' not found",
@@ -211,10 +211,11 @@ class CmsShell(Shell):
             raise EmixError(Code.SYNTAX, invocation.verb)
 
     @verb("CMS", summary="Run a host command", usage="CMS command [args]")
-    def do_cms(self, invocation: Invocation) -> None:
+    def do_cms(self, invocation: Invocation) -> Outcome:
         if not invocation.args:
             raise EmixError(Code.SYNTAX, invocation.verb)
-        self.run_host(Invocation(verb=invocation.args[0], args=invocation.args[1:]))
+        status = self.run_host(Invocation(verb=invocation.args[0], args=invocation.args[1:]))
+        return Outcome(succeeded=status == 0)
 
     @verb("HELP", summary="Display help", usage="HELP [command]")
     def do_help(self, invocation: Invocation) -> None:
@@ -232,9 +233,9 @@ class CmsShell(Shell):
         self.write("\nA fileid is three tokens: FILENAME FILETYPE FILEMODE.\n\n")
 
     @verb("LOGOFF", summary="End the session", usage="LOGOFF", aliases=("LOGOUT", "EXIT", "QUIT"))
-    def do_logoff(self, invocation: Invocation) -> bool:
+    def do_logoff(self, invocation: Invocation) -> Outcome:
         self.write(self.farewell())
-        return True
+        return STOP
 
     def farewell(self) -> str:
         return (

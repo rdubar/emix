@@ -21,7 +21,7 @@ from emix import __version__
 from emix.assist import Concept
 from emix.errors import Code, EmixError
 from emix.host import case_collisions
-from emix.shell import Invocation, Shell, verb
+from emix.shell import STOP, Invocation, Outcome, Shell, verb
 
 _MESSAGES = {
     Code.NO_FILE: "%RMS-E-FNF, file not found",
@@ -272,14 +272,16 @@ class VmsShell(Shell):
             raise EmixError(Code.SYNTAX, invocation.verb)
 
     @verb("RUN", summary="Run a host image", usage="RUN image [args]", min_abbrev=3)
-    def do_run(self, invocation: Invocation) -> None:
+    def do_run(self, invocation: Invocation) -> Outcome:
         if not invocation.args:
             raise EmixError(Code.SYNTAX, invocation.verb)
-        self.run_host(Invocation(verb=invocation.args[0], args=invocation.args[1:]))
+        status = self.run_host(Invocation(verb=invocation.args[0], args=invocation.args[1:]))
+        return Outcome(succeeded=status == 0)
 
     @verb("SPAWN", summary="Run a host command", usage="SPAWN command [args]", min_abbrev=3)
-    def do_spawn(self, invocation: Invocation) -> None:
-        self.do_run(invocation)
+    def do_spawn(self, invocation: Invocation) -> Outcome:
+        outcome = self.do_run(invocation)
+        return outcome if outcome is not None else Outcome()
 
     @verb("HELP", summary="Display help", usage="HELP [topic]", min_abbrev=4)
     def do_help(self, invocation: Invocation) -> None:
@@ -297,9 +299,9 @@ class VmsShell(Shell):
         self.write("\n  Topic? Use HELP <verb> for one command.\n\n")
 
     @verb("LOGOUT", summary="End the session", usage="LOGOUT", aliases=("LO", "EXIT"), min_abbrev=3)
-    def do_logout(self, invocation: Invocation) -> bool:
+    def do_logout(self, invocation: Invocation) -> Outcome:
         self.write(self.farewell())
-        return True
+        return STOP
 
     def farewell(self) -> str:
         return f"  EMIX       job terminated at {datetime.now():%d-%b-%Y %H:%M:%S}\n"

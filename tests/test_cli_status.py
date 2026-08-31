@@ -108,3 +108,45 @@ def test_save_explains_itself_as_marked_assistance_when_assisted(drive):
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert lines[0] == "SAVE?"
     assert all(line.startswith("Emix:") for line in lines[1:]), lines
+
+
+# -- the explicit host wrappers, per personality -------------------------
+#
+# These are the supported way to reach the host in each vocabulary, and each
+# one dropped the status it was handed. A boolean that meant "stop the shell"
+# had no room to also mean "this failed", which is why Outcome exists.
+
+
+@pytest.mark.parametrize(
+    "personality,command",
+    [
+        ("cpm", "UNIX false"),
+        ("vms", "SPAWN false"),
+        ("vms", "RUN false"),
+        ("cms", "CMS false"),
+    ],
+)
+def test_an_explicit_host_wrapper_reports_failure(personality, command, drive):
+    result = emix(personality, "--mount", str(drive), "-c", command, cwd=drive)
+
+    assert result.returncode != 0, f"{personality} -c {command!r} reported success"
+
+
+@pytest.mark.parametrize(
+    "personality,command",
+    [("cpm", "UNIX true"), ("vms", "SPAWN true"), ("cms", "CMS true")],
+)
+def test_an_explicit_host_wrapper_reports_success(personality, command, drive):
+    assert emix(personality, "--mount", str(drive), "-c", command, cwd=drive).returncode == 0
+
+
+def test_save_reports_failure_because_it_refuses_the_operation(drive):
+    """It prints CP/M's refusal, so it must not tell a script it worked."""
+    assert emix("cpm", "--mount", str(drive), "-c", "SAVE 1 X.COM", cwd=drive).returncode != 0
+
+
+def test_leaving_the_session_is_not_a_failure(drive):
+    """Outcome separates 'stop' from 'failed'; EXIT is a stop."""
+    for personality, command in [("cpm", "EXIT"), ("vms", "LOGOUT"), ("cms", "LOGOFF")]:
+        result = emix(personality, "--mount", str(drive), "-c", command, cwd=drive)
+        assert result.returncode == 0, f"{personality} {command}"

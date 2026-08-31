@@ -55,6 +55,29 @@ class Invocation:
 
 
 @dataclass(frozen=True)
+class Outcome:
+    """What one command did.
+
+    Separating "did it work" from "should the session end" keeps one boolean
+    from having to mean both. It previously meant only the second, which is
+    how ``UNIX false`` came to report success to a script: the handler had no
+    way to say the command had failed.
+    """
+
+    #: Whether the command did what it was asked. A one-shot ``-c`` maps this
+    #: to the process exit status.
+    succeeded: bool = True
+    #: Whether this ends the session.
+    stop: bool = False
+
+
+#: A command that ran and did not do what was asked.
+FAILED = Outcome(succeeded=False)
+#: A command that ends the session.
+STOP = Outcome(stop=True)
+
+
+@dataclass(frozen=True)
 class ResolvedDocument:
     """One document an application was asked to open."""
 
@@ -71,7 +94,7 @@ class Verb:
     """A command in a personality's vocabulary."""
 
     name: str
-    handler: Callable[..., bool | None]
+    handler: Callable[..., Outcome | None]
     summary: str
     usage: str = ""
     aliases: tuple[str, ...] = ()
@@ -103,10 +126,10 @@ def verb(
     min_abbrev: int | None = None,
     hidden: bool = False,
     meta: bool = False,
-) -> Callable[[Callable[..., bool | None]], Callable[..., bool | None]]:
+) -> Callable[[Callable[..., Outcome | None]], Callable[..., Outcome | None]]:
     """Mark a method as a command in the enclosing personality."""
 
-    def decorate(function: Callable[..., bool | None]) -> Callable[..., bool | None]:
+    def decorate(function: Callable[..., Outcome | None]) -> Callable[..., Outcome | None]:
         function._emix_verb = Verb(  # type: ignore[attr-defined]
             name=name.upper(),
             handler=function,
@@ -345,12 +368,13 @@ class Shell:
         if found is not None:
             if self.is_emix_verb(found.name):
                 with self._painted_output():
-                    stop = found.handler(self, invocation)
+                    result = found.handler(self, invocation)
             else:
-                stop = found.handler(self, invocation)
-            if stop:
+                result = found.handler(self, invocation)
+            outcome = result if isinstance(result, Outcome) else Outcome()
+            if outcome.stop:
                 self.running = False
-            return True
+            return outcome.succeeded
         application = self.lookup_app(invocation.verb)
         if application is not None:
             return self.run_app(application, invocation) == 0

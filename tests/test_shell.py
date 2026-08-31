@@ -11,7 +11,7 @@ from emix import __version__
 from emix.errors import Code, EmixError
 from emix.personalities.cpm import CpmShell
 from emix.personalities.vms import VmsShell
-from emix.shell import Shell, verb
+from emix.shell import STOP, Shell, verb
 
 
 class Toy(Shell):
@@ -31,7 +31,7 @@ class Toy(Shell):
 
     @verb("QUIT", summary="quit")
     def do_quit(self, invocation):
-        return True
+        return STOP
 
 
 def toy(drives, script=""):

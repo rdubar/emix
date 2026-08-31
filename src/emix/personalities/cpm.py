@@ -19,7 +19,7 @@ from emix.apps.names import AliasMap
 from emix.assist import Concept
 from emix.errors import Code, EmixError
 from emix.host import case_collisions, terminal_width
-from emix.shell import Invocation, Shell, verb
+from emix.shell import FAILED, STOP, Invocation, Outcome, Shell, verb
 
 #: How each engine error code is worded by the CCP.
 _MESSAGES = {
@@ -215,7 +215,7 @@ class CpmShell(Shell):
         self.drives.rename(source, destination)
 
     @verb("SAVE", summary="SAVE MEMORY TO A FILE", usage="SAVE N FILE")
-    def do_save(self, invocation: Invocation) -> None:
+    def do_save(self, invocation: Invocation) -> Outcome:
         """The one CCP built-in Emix cannot honestly provide.
 
         ``SAVE`` wrote N pages of the Transient Program Area to disk. Emix has
@@ -231,7 +231,7 @@ class CpmShell(Shell):
         if self.strict:
             # Strict mode is the authentic baseline. `SAVE?` is what a CCP
             # with no such program would have said, and that is all of it.
-            return
+            return FAILED
         self.write_hints(
             [
                 "SAVE copied pages of the Transient Program Area to disk.",
@@ -239,6 +239,8 @@ class CpmShell(Shell):
                 "honest way to provide this. It is listed because CP/M had it.",
             ]
         )
+        # The operation was refused, so a script must not be told it worked.
+        return FAILED
 
     @verb("USER", summary="SELECT A USER AREA", usage="USER N")
     def do_user(self, invocation: Invocation) -> None:
@@ -296,10 +298,11 @@ class CpmShell(Shell):
             self.write(f"{marker}{name}: {drive.root}\n")
 
     @verb("UNIX", summary="RUN A HOST COMMAND", usage="UNIX COMMAND [ARGS]")
-    def do_unix(self, invocation: Invocation) -> None:
+    def do_unix(self, invocation: Invocation) -> Outcome:
         if not invocation.args:
             raise EmixError(Code.SYNTAX, invocation.verb)
-        self.run_host(Invocation(verb=invocation.args[0], args=invocation.args[1:]))
+        status = self.run_host(Invocation(verb=invocation.args[0], args=invocation.args[1:]))
+        return Outcome(succeeded=status == 0)
 
     @verb("CLS", summary="CLEAR THE SCREEN", usage="CLS")
     def do_cls(self, invocation: Invocation) -> None:
@@ -345,9 +348,9 @@ class CpmShell(Shell):
                 self.write(f"  {found.usage.upper():<24} {found.summary.upper()}\n")
 
     @verb("EXIT", summary="RETURN TO UNIX", usage="EXIT", aliases=("BYE", "QUIT"))
-    def do_exit(self, invocation: Invocation) -> bool:
+    def do_exit(self, invocation: Invocation) -> Outcome:
         self.write(self.farewell())
-        return True
+        return STOP
 
     def farewell(self) -> str:
         return "RETURNING TO UNIX.\n"

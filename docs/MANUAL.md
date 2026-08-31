@@ -244,8 +244,11 @@ Save these changes to the host? [Y/n]
 
 Only the document you named is staged, so the program cannot read the rest of
 the folder. The editor's own backup is named but not committed. The write is
-atomic, and is refused outright if the host file changed while the guest was
-running.
+atomic, and is refused if Emix sees that the host file changed while the guest
+was running — checked before the session and again immediately before the
+write. That is best-effort detection rather than exclusion: a host write
+landing inside the final handoff can still be lost. See
+[APPLICATIONS.md](APPLICATIONS.md) for the exact contract.
 
 ---
 
@@ -284,7 +287,8 @@ Emix runs on your real home directory, so the boundaries are explicit:
   exist, Emix says so rather than picking one.
 - **Destructive commands confirm**, and anything but an explicit yes is no.
 - **Guest changes are reviewed before they are committed**, written
-  atomically, and refused if the host file moved underneath the session.
+  atomically, and refused when Emix sees the host file has moved underneath
+  the session. Detection is best-effort, not exclusion.
 
 Erasing a file in Emix erases it on the host. That is the point of the
 project, and the reason for everything above.

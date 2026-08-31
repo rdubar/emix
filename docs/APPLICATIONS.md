@@ -114,7 +114,9 @@ emix apps                     list profiles and check backends
   than through a temporary file, and there is no command to list or recover a
   retained session. Both are named as future work below.
 - `session.py` — stage one document, detect change, refuse to commit over a
-  host file that moved underneath, replace atomically, all-or-nothing.
+  host file seen to have moved underneath, replace atomically, and roll back
+  as a set. Detection is best-effort, not exclusion: see the commit guarantee
+  above.
 - `backends.py` — the adapter protocol, a RunCPM adapter, and a fake so the
   test suite never needs a third-party binary installed.
 - `profiles.py` — TOML profiles. Emix ships no software; a profile only
@@ -221,13 +223,23 @@ window to the microseconds between the copy and the rename. It does not close
 it. Closing it needs filesystem locking, which is not portable, so the honest
 statement is:
 
-> Your original is recoverable. A concurrent edit is *almost always* detected
-> and refused, but a write that lands inside the final handoff is not.
+> Emix re-checks immediately before each replacement and keeps its recovery
+> material whenever a commit fails. A host write landing inside the final
+> handoff — between that check and the rename — is still lost, and after a
+> **successful** commit the workspace is removed, so nothing of the displaced
+> version survives.
 
-An earlier draft of this document claimed the stronger thing. It was wrong,
-and an independent review demonstrated both the false claim and a second
-defect behind it: rollback errors were suppressed, so a partial commit could
-be reported as a clean undo.
+Two earlier drafts of this document claimed something stronger. The first
+claimed unconditional refusal; the second still said "your original is
+recoverable", which is untrue precisely when the race is *won* — the commit
+then succeeds, and success removes the workspace. Independent review found
+both, along with the defect behind the first: rollback errors were suppressed,
+so a partial commit could be reported as a clean undo.
+
+**The contract, stated once.** For an external backend, conflict detection is
+best-effort, not exclusion. Emix promises to look immediately before it
+writes, to refuse when it sees a change, and to keep everything when a commit
+fails. It does not promise that a concurrent write cannot be lost.
 
 **Rollback can itself fail** — a disk that filled, a volume that went away.
 More of the same operation cannot fix that. Emix stops, keeps everything, and
@@ -238,6 +250,12 @@ commit failed AND could not be fully undone (…).
 These host files are in an unknown state: notes.txt.
 Their originals are kept at: /…/emix-session-ab12/rollback/000-notes.txt
 ```
+
+You may delete a retained workspace once you have checked your host files.
+Emix never prunes one automatically, and the temporary directory it currently
+lives in is not durable storage — the operating system may clear it. A stable
+state directory and an `emix sessions` command belong with the recovery work
+below.
 
 ### If this needs to be stronger later
 
@@ -257,13 +275,17 @@ In rough order of cost:
 3. **Single-directory commits via a staging directory swap**, where the
    platform supports renaming a directory into place. Faster and stronger,
    but only applicable when every target shares one directory.
-4. **Filesystem locking** on platforms that offer it, which is the only thing
-   that would let Emix promise a concurrent edit cannot be lost rather than
-   merely that it is usually caught.
+4. **Mandatory or cooperating locking, or a platform-specific atomic handoff
+   primitive.** Ordinary POSIX file locks are *advisory*: an editor that never
+   asks for Emix's lock writes straight through it, so a plain `flock` would
+   buy nothing. Only a mechanism the other writer is obliged to honour would
+   let Emix promise exclusion rather than best-effort detection.
 
-None of these are needed while a session commits one document plus whatever
-that program made alongside it. They become worth the cost when sessions span
-several documents, or when Emix keeps state across runs.
+Options 1–3 become worth their cost when sessions span several documents or
+Emix keeps state across runs. Option 4 is different: the final-handoff race
+exists with a *single* document, so its importance has nothing to do with how
+many files a transaction covers. It is deferred because it is not portable,
+not because it is unimportant.
 
 ## Safety model
 
@@ -272,7 +294,9 @@ several documents, or when Emix keeps state across runs.
 3. A document session exposes one file, not its folder.
 4. Changes are reviewed before commit.
 5. Host updates are atomic; the original survives a failure.
-6. Commit refuses when the host file changed during the session.
+6. Commit refuses when it *observes* that the host file changed during the
+   session — checked at preflight and again immediately before each write.
+   This is best-effort detection, not a guarantee of exclusion.
 7. The manifest lives outside every mounted drive.
 8. Network and clipboard capabilities are off, and unimplemented.
 9. A resource ceiling for unattended sessions. Not theoretical: TE spins and

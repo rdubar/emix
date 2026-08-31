@@ -125,7 +125,7 @@ BASIC-85 5.29; `DDT` gets you the debugger.
 
 Only the document you named is staged, so the program cannot see the rest of
 the folder. The editor's own scratch file is named but not committed. The
-write is atomic, and is refused if the host file changed while the guest ran.
+write is atomic, and is refused if Emix sees that the host file changed while the guest ran (checked before the write, though a write landing inside the final handoff can still be lost).
 
 ## What is authentic and what is not
 
