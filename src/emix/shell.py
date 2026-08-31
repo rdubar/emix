@@ -296,16 +296,26 @@ class Shell:
         carries on, as a command processor should.
         """
         invocation = None
+        # A provisional record, in place *before* parsing, because parsing can
+        # itself fail: an unmatched quote is a failure EXPLAIN should be able
+        # to describe. It is rolled back below when the line turns out to be a
+        # meta command, which must not become the subject EXPLAIN talks about.
+        previous = (self.last_invocation, self.last_error)
+        self.recording = True
+        self.last_invocation = Invocation(verb=line.strip().split(" ")[0].upper(), args=[])
+        self.last_error = None
         try:
             invocation = self.parse(line)
             if invocation is None:
+                self.last_invocation, self.last_error = previous
                 return True
             found = self.lookup(invocation.verb)
             self.recording = found is None or not found.meta
             if self.recording:
                 self.last_invocation = invocation
-                self.last_error = None
-            self.dispatch(invocation)
+            else:
+                self.last_invocation, self.last_error = previous
+            succeeded = self.dispatch(invocation)
         except EmixError as error:
             # The authentic response first, verbatim and unaltered. Only then
             # may Emix add anything of its own.
@@ -322,9 +332,15 @@ class Shell:
             return False
         else:
             self.after_command(line)
-            return True
+            return succeeded
 
-    def dispatch(self, invocation: Invocation) -> None:
+    def dispatch(self, invocation: Invocation) -> bool:
+        """Run one invocation. Returns whether it succeeded.
+
+        A host command that exits non-zero and an application that fails are
+        both failures, even though neither raises: a script has to be able to
+        tell, and printing an error is not telling.
+        """
         found = self.lookup(invocation.verb)
         if found is not None:
             if self.is_emix_verb(found.name):
@@ -334,11 +350,10 @@ class Shell:
                 stop = found.handler(self, invocation)
             if stop:
                 self.running = False
-            return
+            return True
         application = self.lookup_app(invocation.verb)
         if application is not None:
-            self.run_app(application, invocation)
-            return
+            return self.run_app(application, invocation) == 0
         if not self.host_fallthrough:
             raise EmixError(Code.UNKNOWN_VERB, invocation.verb)
         # A host command that works still teaches nothing about the era, so
@@ -350,7 +365,7 @@ class Shell:
             translated = translation_hint(self.title, invocation.verb, self.translations)
             if translated:
                 self.write_hints([translated])
-        self.run_host(invocation)
+        return self.run_host(invocation) == 0
 
     # -- shared Emix commands ------------------------------------------
 
@@ -573,7 +588,7 @@ class Shell:
     def lookup_app(self, verb: str) -> object | None:
         return self.applications().get(verb.upper())
 
-    def run_app(self, profile: object, invocation: Invocation) -> None:
+    def run_app(self, profile: object, invocation: Invocation) -> int:
         """Open a file from the current drive in a historical application.
 
         The filename is resolved through :class:`~emix.host.DriveSet` first,
@@ -592,7 +607,7 @@ class Shell:
             resolved = self.resolve_document(invocation.args[0])
             document, new_name, home = resolved.host, resolved.new_name, resolved.home
 
-        open_session(
+        return open_session(
             profile,  # type: ignore[arg-type]
             document=document,
             new_name=new_name,
@@ -619,9 +634,9 @@ class Shell:
         self.drives.reserve(name, drive=drive)
         return ResolvedDocument(new_name=name, home=home)
 
-    def run_host(self, invocation: Invocation) -> None:
+    def run_host(self, invocation: Invocation) -> int:
         """Offer the line to the host as an executable, with no shell."""
-        run_host_command([invocation.verb, *invocation.args], cwd=self.drives.default)
+        return run_host_command([invocation.verb, *invocation.args], cwd=self.drives.default)
 
     # -- output ---------------------------------------------------------
 

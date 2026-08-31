@@ -2,9 +2,13 @@
 
 Everything else in a document session is code that can be replaced. The
 manifest is *state that outlives the process*, so it is written before the
-guest starts and carries an explicit :data:`SCHEMA` version. If Emix dies
-mid-session, a later version must still be able to read the staging directory
-it left behind and tell the user which host files are at risk.
+guest starts and carries an explicit :data:`SCHEMA` version.
+
+It is diagnostic metadata rather than a recovery system, and the difference
+matters: it is written straight to its final path, not through a temporary
+file and rename, and nothing yet reads it back to offer a user their retained
+sessions. A later version can read what a crash left behind; today a human
+has to go and look.
 
 Digests are taken at staging time for two reasons: change detection that does
 not trust mtime, and a conflict check that refuses to commit over a host file

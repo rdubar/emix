@@ -222,7 +222,22 @@ def open_session(
                 keep = True
                 return 0
 
-        written = session.commit(pending)
+        try:
+            written = session.commit(pending)
+        except EmixError as error:
+            # The workspace holds the rollback copies, so discarding it here
+            # would destroy the only evidence of what happened. Keep it on
+            # every commit failure, not only the ones we can undo.
+            keep = True
+            stream.write(f"\n{error.detail or error}\n")
+            undone = session.rollback
+            if undone is not None and not undone.complete:
+                stream.write("These host files need a human:\n")
+                for path in undone.unresolved:
+                    stream.write(f"  UNRESOLVED  {path}\n")
+                for path in undone.backups:
+                    stream.write(f"  ORIGINAL AT {path}\n")
+            return 1
         for path in written:
             stream.write(f"  saved {path}\n")
         return 0

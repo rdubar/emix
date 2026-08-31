@@ -939,3 +939,197 @@ def test_an_application_argument_uses_the_personality_filespec(installed, home, 
     assert shell.resolve_document("B:NOTES.TXT").host == other / "NOTES.TXT"
     assert shell.resolve_document("PYPROJ_1.TOM").host == home / "pyproject.toml"
     assert shell.resolve_document("BRANDNEW.TXT").new_name == "BRANDNEW.TXT"
+
+
+# -- the implementation review's findings, as regressions ----------------
+
+
+def _fail_nth_replace(monkeypatch, n):
+    """Make the nth call to _replace fail, leaving earlier ones applied."""
+    real = DocumentSession._replace
+    calls = {"n": 0}
+
+    def failing(source, destination):
+        calls["n"] += 1
+        if calls["n"] == n:
+            raise OSError("replacement failed")
+        return real(source, destination)
+
+    monkeypatch.setattr(DocumentSession, "_replace", staticmethod(failing))
+    return real
+
+
+def test_a_failed_rollback_is_never_reported_as_a_successful_one(home, document, monkeypatch):
+    """I1: the message must not claim an undo that did not happen."""
+    second = home / "second.txt"
+    second.write_text("second original\n")
+    session = session_for(home)
+    session.stage([document, second])
+    session.write_manifest()
+    for entry in session.manifest.files:
+        (session.drive_dir(entry.drive) / entry.guest).write_text("guest edit\n")
+
+    _fail_nth_replace(monkeypatch, 2)
+    real_os_replace = os.replace
+
+    def failing_restore(source, destination):
+        # Match the rollback directory exactly: the pytest tmp_path contains
+        # this test's own name, so a substring check matches everything.
+        if Path(source).parent.name == "rollback":
+            raise OSError("restoration failed")
+        return real_os_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", failing_restore)
+
+    with pytest.raises(EmixError) as caught:
+        session.commit(session.changes())
+
+    detail = caught.value.detail
+    assert "could not be fully undone" in detail
+    assert "was rolled back" not in detail
+    assert session.rollback is not None and not session.rollback.complete
+    assert document.resolve() in session.rollback.unresolved
+    assert session.rollback.backups, "the original must still be on disk"
+
+
+def test_a_failed_commit_keeps_the_workspace_holding_its_rollback_copies(
+    tmp_path, home, document, monkeypatch
+):
+    """I1: discarding the workspace destroys the only evidence."""
+
+    def edit(session):
+        entry = session.manifest.files[0]
+        (session.drive_dir(entry.drive) / entry.guest).write_text("edited\n")
+
+    monkeypatch.setattr(
+        DocumentSession,
+        "commit",
+        lambda self, changes: (_ for _ in ()).throw(EmixError(Code.IO_ERROR, "commit", "boom")),
+    )
+    stream = io.StringIO()
+
+    status = open_session(
+        profile(tmp_path),
+        document=document,
+        backend=FakeBackend(mutate=edit),
+        assume_yes=True,
+        stream=stream,
+    )
+
+    assert status == 1
+    assert "Workspace kept at" in stream.getvalue()
+    kept = Path(stream.getvalue().split("Workspace kept at:")[1].strip().splitlines()[0])
+    assert kept.exists()
+
+
+def test_an_unresolved_commit_names_the_files_and_their_originals(
+    tmp_path, home, document, monkeypatch
+):
+    from emix.apps.session import RollbackOutcome
+
+    def unresolved_commit(self, changes):
+        self.rollback = RollbackOutcome(unresolved=(home / "doc.txt",), backups=(home / "keep",))
+        raise EmixError(Code.IO_ERROR, "commit", "boom")
+
+    monkeypatch.setattr(DocumentSession, "commit", unresolved_commit)
+
+    def edit(session):
+        entry = session.manifest.files[0]
+        (session.drive_dir(entry.drive) / entry.guest).write_text("edited\n")
+
+    stream = io.StringIO()
+
+    open_session(
+        profile(tmp_path),
+        document=document,
+        backend=FakeBackend(mutate=edit),
+        assume_yes=True,
+        stream=stream,
+    )
+
+    assert "UNRESOLVED" in stream.getvalue()
+    assert "ORIGINAL AT" in stream.getvalue()
+
+
+def test_a_host_edit_after_preflight_is_caught_before_the_write(home, document, monkeypatch):
+    """I2: narrows the window between the conflict check and the replace."""
+    import emix.apps.session as module
+
+    session = session_for(home)
+    entry = session.stage([document])[0]
+    session.write_manifest()
+    (session.drive_dir(entry.drive) / entry.guest).write_text("guest edit\n")
+
+    real_copy = module.shutil.copy2
+
+    def racing_backup(source, destination):
+        # The host changes after conflicts() cleared it and before the replace.
+        Path(source).write_text("concurrent edit\n")
+        return real_copy(source, destination)
+
+    monkeypatch.setattr(module.shutil, "copy2", racing_backup)
+
+    with pytest.raises(EmixError) as caught:
+        session.commit(session.changes())
+
+    assert "during the commit" in caught.value.detail
+    assert document.read_text() == "concurrent edit\n"
+
+
+def test_a_host_file_that_vanishes_after_preflight_is_caught(home, document, monkeypatch):
+    session = session_for(home)
+    entry = session.stage([document])[0]
+    session.write_manifest()
+    (session.drive_dir(entry.drive) / entry.guest).write_text("guest edit\n")
+    changes = session.changes()
+    # Preflight catches a file already gone, so reaching the loop's own guard
+    # means simulating a disappearance between the two.
+    monkeypatch.setattr(DocumentSession, "conflicts", lambda self, pending: [])
+    document.unlink()
+
+    with pytest.raises(EmixError) as caught:
+        session.commit(changes)
+
+    assert "disappeared" in caught.value.detail
+
+
+def test_a_reserved_name_that_appears_before_the_write_is_caught(home, monkeypatch):
+    session = session_for(home)
+    entry = session.stage_new("late.txt")
+    session.write_manifest()
+    (session.drive_dir(entry.drive) / entry.guest).write_text("from the guest\n")
+    changes = session.changes()
+    (home / "late.txt").write_text("somebody else got here\n")
+
+    with pytest.raises(EmixError):
+        session.commit(changes)
+
+    assert (home / "late.txt").read_text() == "somebody else got here\n"
+
+
+def test_an_optional_path_must_be_a_string(tmp_path):
+    from emix.apps import profiles as module
+
+    config = tmp_path / "apps.toml"
+    config.write_text(
+        f'[app.x]\nbackend="fake"\nprogram="T.COM"\napplication="{tmp_path}"\nexecutable=42\n'
+    )
+
+    with pytest.raises(EmixError) as caught:
+        module.load(config)
+
+    assert "executable" in caught.value.subject
+
+
+def test_an_unknown_personality_is_refused(tmp_path):
+    from emix.apps import profiles as module
+
+    config = tmp_path / "apps.toml"
+    config.write_text(
+        f'[app.x]\nbackend="fake"\nprogram="T.COM"\napplication="{tmp_path}"\nsystem="cpn"\n'
+    )
+
+    with pytest.raises(EmixError) as caught:
+        module.load(config)
+
+    assert "cpn" in str(caught.value) or "unknown personality" in caught.value.detail

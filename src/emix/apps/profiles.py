@@ -23,6 +23,10 @@ from emix.errors import Code, EmixError
 #: Checked before the default location.
 ENVIRONMENT = "EMIX_APPS"
 
+#: Personalities an application may belong to. Validated here so a typo does
+#: not produce a profile that silently belongs to nothing.
+KNOWN_SYSTEMS = frozenset({"cpm", "vms", "cms"})
+
 #: Every key a profile may set. A misspelling in a config file is expensive to
 #: find by its effects, so it is refused by name instead.
 _KNOWN_KEYS = frozenset(
@@ -103,6 +107,16 @@ class Profile:
             return value
 
         program = text("program")
+        command = text("command", required=False, default=program.split(".")[0]).upper()
+        if not command:
+            raise EmixError(Code.SYNTAX, f"app.{name}.command", "must not be empty")
+        system = text("system", required=False, default="cpm").lower()
+        if system not in KNOWN_SYSTEMS:
+            raise EmixError(
+                Code.SYNTAX,
+                f"app.{name}.system",
+                f"unknown personality (known: {', '.join(sorted(KNOWN_SYSTEMS))})",
+            )
 
         def number(key: str, default: int, low: int, high: int) -> int:
             value = table.get(key, default)
@@ -130,16 +144,24 @@ class Profile:
                 raise EmixError(Code.SYNTAX, f"app.{name}.{key}", "expected a list of patterns")
             return tuple(value)
 
-        executable = table.get("executable")
+        def optional_path(key: str) -> Path | None:
+            value = table.get(key)
+            if value is None:
+                return None
+            if not isinstance(value, str) or not value:
+                raise EmixError(Code.SYNTAX, f"app.{name}.{key}", "expected a path as a string")
+            return Path(value).expanduser()
+
+        executable = optional_path("executable")
         return cls(
             name=name,
             backend=text("backend"),
             program=program,
-            command=text("command", required=False, default=program.split(".")[0]).upper(),
-            system=text("system", required=False, default="cpm").lower(),
+            command=command,
+            system=system,
             application=Path(text("application")).expanduser(),
             terminal=text("terminal", required=False, default="vt100"),
-            executable=Path(str(executable)).expanduser() if executable else None,
+            executable=executable,
             alias_suffix=text("alias-suffix", required=False, default=names.DEFAULT_SUFFIX),
             notes=text("notes", required=False),
             exit_hint=text("exit", required=False),

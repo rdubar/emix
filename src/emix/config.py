@@ -75,7 +75,10 @@ def load(path: Path | None = None) -> Config:
     if strict is not None and not isinstance(strict, bool):
         raise EmixError(Code.SYNTAX, str(source), "'strict' must be true or false")
 
-    configured = payload.get("drives") or {}
+    # Not `or {}`: that quietly accepts every false-valued wrong type, so a
+    # `drives = []` typo would read as "no drives configured" rather than as
+    # the mistake it is.
+    configured = payload.get("drives", {})
     if not isinstance(configured, dict):
         raise EmixError(Code.SYNTAX, str(source), "'drives' must be a table")
     drives: dict[str, list[Path]] = {}

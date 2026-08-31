@@ -19,7 +19,7 @@ So the shape here is deliberate:
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-import contextlib
+from dataclasses import dataclass
 import fnmatch
 import os
 from pathlib import Path
@@ -38,6 +38,23 @@ DriveLayout = Callable[[Path, str], Path]
 #: Files applications make for themselves. TE writes ``TE.BKP``; CP/M editors
 #: conventionally leave ``.BAK``; ``$$$`` is CP/M's own scratch suffix.
 DEFAULT_AUXILIARY: tuple[str, ...] = ("*.BAK", "*.BKP", "*.$$$", "*.TMP", "*.SWP")
+
+
+@dataclass(frozen=True)
+class RollbackOutcome:
+    """How much of a failed commit was successfully undone."""
+
+    #: Host files put back as they were.
+    restored: tuple[Path, ...] = ()
+    #: Host files that could not be restored or removed. These are the ones a
+    #: human has to deal with.
+    unresolved: tuple[Path, ...] = ()
+    #: Backup copies still on disk, for the unresolved targets.
+    backups: tuple[Path, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        return not self.unresolved
 
 
 def flat_layout(root: Path, drive: str) -> Path:
@@ -78,6 +95,8 @@ class DocumentSession:
         self._auxiliary = tuple(auxiliary)
         self._staged: list[StagedFile] = []
         self._manifest: Manifest | None = None
+        #: Set when a commit failed, describing how far the undo got.
+        self.rollback: RollbackOutcome | None = None
 
     @classmethod
     def create(
@@ -295,13 +314,18 @@ class DocumentSession:
         transaction written by hand:
 
         1. refuse outright if anything conflicts, before touching the host;
-        2. take a rollback copy of every file that is about to be overwritten;
-        3. replace each target;
-        4. on any failure, put the originals back and remove what was created.
+        2. for each target in turn, copy the file about to be overwritten into
+           the session, check that copy still matches what step 1 saw, and
+           only then replace it;
+        3. on any failure, restore what was replaced and remove what was
+           created, and report exactly how much of that succeeded.
 
-        The residual risk is a failure *during* rollback, which cannot be
-        undone by more of the same. That case keeps the workspace and reports
-        the rollback copies by path, so nothing is lost silently.
+        Step 2's re-check is what narrows — **not closes** — the window
+        between the conflict check and the write. A host edit landing inside
+        the microseconds between the backup and the replace is still lost, and
+        no amount of hashing fixes that; only filesystem locking would, and
+        that is not portable. See ``docs/APPLICATIONS.md`` for the guarantee
+        this does and does not amount to.
         """
         pending = self.pending(changes)
         clashing = self.conflicts(pending)
@@ -316,40 +340,89 @@ class DocumentSession:
         written: list[Path] = []
         try:
             for index, change in enumerate(pending):
+                entry = self.manifest.by_guest(change.guest)
+                expected = entry.origin_digest if entry else None
                 if change.host.exists():
+                    if expected is None:
+                        raise EmixError(Code.EXISTS, change.host.name, "appeared during the commit")
                     keep = rollback / f"{index:03d}-{change.host.name}"
                     shutil.copy2(change.host, keep)
                     originals.append((change.host, keep))
+                    # The backup is a snapshot of the host at this instant. If
+                    # it no longer matches what the conflict check saw, the
+                    # file moved underneath us after preflight.
+                    if digest(keep) != expected:
+                        raise EmixError(Code.EXISTS, change.host.name, "changed during the commit")
+                elif expected is not None:
+                    raise EmixError(Code.NO_FILE, change.host.name, "disappeared during the commit")
                 else:
                     created.append(change.host)
                 self._replace(change.staged, change.host)
                 written.append(change.host)
         except (EmixError, OSError) as error:
-            self._roll_back(originals, created, written)
-            raise EmixError(
-                Code.IO_ERROR,
-                ", ".join(path.name for path in written) or "commit",
-                f"commit failed and was rolled back: {error}",
-            ) from error
+            self.rollback = self._roll_back(originals, created, written)
+            raise self._failure(error, self.rollback) from error
+        self.rollback = None
         return written
+
+    @staticmethod
+    def _failure(error: Exception, outcome: RollbackOutcome) -> EmixError:
+        """Describe a failed commit truthfully, including a failed rollback."""
+        if outcome.complete:
+            return EmixError(
+                Code.IO_ERROR,
+                "commit",
+                f"commit failed and was rolled back: {error}",
+            )
+        unresolved = ", ".join(path.name for path in outcome.unresolved)
+        kept = ", ".join(str(path) for path in outcome.backups)
+        return EmixError(
+            Code.IO_ERROR,
+            "commit",
+            f"commit failed AND could not be fully undone ({error}). "
+            f"These host files are in an unknown state: {unresolved}. "
+            f"Their originals are kept at: {kept}",
+        )
 
     @staticmethod
     def _roll_back(
         originals: list[tuple[Path, Path]],
         created: list[Path],
         written: list[Path],
-    ) -> None:
-        """Undo a partial commit. Best effort, and never raises over the top
-        of the failure that caused it."""
+    ) -> RollbackOutcome:
+        """Undo a partial commit, and say exactly how far it got.
+
+        Suppressing the errors here would be the worst possible silence: it is
+        the moment when Emix either did or did not keep its promise about the
+        user's documents, and the caller cannot tell the difference without
+        being told.
+        """
         done = set(written)
+        restored: list[Path] = []
+        unresolved: list[Path] = []
+        backups: list[Path] = []
         for target, keep in originals:
-            if target in done:
-                with contextlib.suppress(OSError):
-                    os.replace(keep, target)
+            backups.append(keep)
+            if target not in done:
+                continue
+            try:
+                os.replace(keep, target)
+                restored.append(target)
+                backups.pop()
+            except OSError:
+                unresolved.append(target)
         for target in created:
-            if target in done:
-                with contextlib.suppress(OSError):
-                    target.unlink()
+            if target not in done:
+                continue
+            try:
+                target.unlink()
+            except OSError:
+                unresolved.append(target)
+        return RollbackOutcome(
+            restored=tuple(restored),
+            unresolved=tuple(unresolved),
+            backups=tuple(backups),
+        )
 
     @staticmethod
     def _replace(source: Path, destination: Path) -> None:

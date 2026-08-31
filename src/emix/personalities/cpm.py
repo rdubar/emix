@@ -214,17 +214,30 @@ class CpmShell(Shell):
         destination = self.drives.reserve(new_name, drive=new_drive or old_drive)
         self.drives.rename(source, destination)
 
-    @verb("SAVE", summary="NOT AVAILABLE IN EMIX", usage="SAVE N FILE")
+    @verb("SAVE", summary="SAVE MEMORY TO A FILE", usage="SAVE N FILE")
     def do_save(self, invocation: Invocation) -> None:
         """The one CCP built-in Emix cannot honestly provide.
 
         ``SAVE`` wrote N pages of the Transient Program Area to disk. Emix has
-        no TPA — it runs no 8080 — so there is nothing to save. Simulating
-        memory that does not exist would be exactly the invention the project
-        says it will not make, so this says what it is instead.
+        no TPA — it runs no 8080 — so there is nothing to save.
+
+        The answer has to obey the same rule as everything else: CP/M's own
+        response first, and the explanation as *marked* assistance. Emix prose
+        on the native path would be exactly the confusion between period and
+        non-period output that the rest of the project works to prevent — and
+        in strict mode it would be unmarked invention.
         """
-        self.write(
-            "SAVE IS NOT AVAILABLE IN EMIX.\nIT COPIED MEMORY FROM THE TPA, AND EMIX HAS NO TPA.\n"
+        self.write("SAVE?\n")
+        if self.strict:
+            # Strict mode is the authentic baseline. `SAVE?` is what a CCP
+            # with no such program would have said, and that is all of it.
+            return
+        self.write_hints(
+            [
+                "SAVE copied pages of the Transient Program Area to disk.",
+                "Emix runs no 8080, so there is no TPA to copy from and no",
+                "honest way to provide this. It is listed because CP/M had it.",
+            ]
         )
 
     @verb("USER", summary="SELECT A USER AREA", usage="USER N")

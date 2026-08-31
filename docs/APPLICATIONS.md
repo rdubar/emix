@@ -97,7 +97,7 @@ consequence of not owning the BDOS, and for CP/M it is temporary.
 
 ## What is built
 
-`src/emix/apps/`, 107 tests passing, no new runtime dependencies.
+`src/emix/apps/`, no new runtime dependencies.
 
 ```
 emix open FILE --with APP     stage, run, review, commit
@@ -109,8 +109,10 @@ emix apps                     list profiles and check backends
   `PYPROJEC.TOM` looks like a real name and is not one. This is also
   roadmap 0.3's alias item, built once for both users.
 - `manifest.py` — schema-versioned JSON, written and fsynced **before** the
-  guest launches, so a crash is recoverable rather than mysterious. Content
-  digests, never mtimes.
+  guest launches. Content digests, never mtimes. It is diagnostic metadata,
+  not yet a recovery system: it is written directly to its final path rather
+  than through a temporary file, and there is no command to list or recover a
+  retained session. Both are named as future work below.
 - `session.py` — stage one document, detect change, refuse to commit over a
   host file that moved underneath, replace atomically, all-or-nothing.
 - `backends.py` — the adapter protocol, a RunCPM adapter, and a fake so the
@@ -204,22 +206,46 @@ removed.
 ### What is actually guaranteed
 
 - A commit that returns has applied every change.
-- A commit that raises has applied none of them, and the host is as it was.
-- Conflicts are detected before the first write, never partway through.
+- A commit that raises has either undone everything, or says plainly that it
+  could not and names the files left in an unknown state along with the paths
+  of their originals. It never claims an undo it did not perform.
+- The workspace, and the `rollback/` copies inside it, are kept on **every**
+  commit failure.
 
-### The residual risk, stated plainly
+### What is *not* guaranteed, and cannot be
 
-Rollback can itself fail — a disk that filled, a volume that went away. More
-of the same operation cannot fix that, so Emix stops, keeps the workspace and
-its `rollback/` copies, and names the paths. Nothing is lost silently, but a
-human has to finish the job.
+**A concurrent host edit can still be lost.** Emix checks every target's
+digest before the first write, and checks it again — via the rollback copy it
+has just taken — immediately before replacing each file. That narrows the
+window to the microseconds between the copy and the rename. It does not close
+it. Closing it needs filesystem locking, which is not portable, so the honest
+statement is:
+
+> Your original is recoverable. A concurrent edit is *almost always* detected
+> and refused, but a write that lands inside the final handoff is not.
+
+An earlier draft of this document claimed the stronger thing. It was wrong,
+and an independent review demonstrated both the false claim and a second
+defect behind it: rollback errors were suppressed, so a partial commit could
+be reported as a clean undo.
+
+**Rollback can itself fail** — a disk that filled, a volume that went away.
+More of the same operation cannot fix that. Emix stops, keeps everything, and
+reports:
+
+```text
+commit failed AND could not be fully undone (…).
+These host files are in an unknown state: notes.txt.
+Their originals are kept at: /…/emix-session-ab12/rollback/000-notes.txt
+```
 
 ### If this needs to be stronger later
 
 In rough order of cost:
 
 1. **Journal the intent before the first write**, so an Emix that dies
-   mid-commit can finish or undo on next launch. This is the natural partner
+   mid-commit — rather than merely failing inside it — can finish or undo on
+   next launch. Today's rollback is in-process only. This is the natural partner
    to the session-state work below, and the manifest already provides most of
    the machinery.
 2. **A session state machine** — `preparing → staged → guest-running →
@@ -231,6 +257,9 @@ In rough order of cost:
 3. **Single-directory commits via a staging directory swap**, where the
    platform supports renaming a directory into place. Faster and stronger,
    but only applicable when every target shares one directory.
+4. **Filesystem locking** on platforms that offer it, which is the only thing
+   that would let Emix promise a concurrent edit cannot be lost rather than
+   merely that it is usually caught.
 
 None of these are needed while a session commits one document plus whatever
 that program made alongside it. They become worth the cost when sessions span
@@ -258,9 +287,11 @@ protects the host from the *guest program*, not from a malicious emulator.
 
 ## Next
 
-**Phase 1 — finish the CP/M session.** A resource ceiling and interrupt
-handling. Terminal geometry in the profile (TE assumes 80×24). A rule for
-guest files whose names cannot map home. Golden-transcript tests.
+**Phase 1 — finish the CP/M session.** Done: the resource ceiling, interrupt
+handling, terminal geometry in the profile, auxiliary-file rules and
+golden-transcript tests. Still open: `emix sessions` to list, inspect and
+recover retained workspaces, and a journal so recovery survives Emix itself
+dying mid-commit.
 
 **Phase 2 — DOS under DOSBox-X.** One question first, before any adapter:
 DOSBox-X is SDL-based and will open its own window, which breaks "exit
