@@ -58,7 +58,7 @@ addopts = "-q --strict-markers"
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S", "C4", "SIM", "RUF"]

@@ -14,7 +14,7 @@ somebody else edited while the guest was running.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 import hashlib
 import json
@@ -48,6 +48,10 @@ class ChangeKind(Enum):
     MODIFIED = "MODIFIED"
     CREATED = "CREATED"
     UNCHANGED = "UNCHANGED"
+    #: The guest removed a staged document. Emix does not delete host files on
+    #: a guest's say-so, but reporting nothing would let the user believe the
+    #: session did nothing at all.
+    DELETED = "DELETED"
     #: A backup or scratch file the application made for its own purposes.
     #: Reported so nothing is hidden, but not committed: an editor's ``.BAK``
     #: is part of how it works, not part of what you asked it to do.
@@ -100,7 +104,7 @@ class Manifest:
             session_id=session_id,
             app=app,
             backend=backend,
-            created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            created=datetime.now(UTC).isoformat(timespec="seconds"),
             files=files,
         )
 

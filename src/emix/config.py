@@ -16,7 +16,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
-
 import tomllib
 
 from emix.assist import COLOURS
@@ -76,8 +75,11 @@ def load(path: Path | None = None) -> Config:
     if strict is not None and not isinstance(strict, bool):
         raise EmixError(Code.SYNTAX, str(source), "'strict' must be true or false")
 
+    configured = payload.get("drives") or {}
+    if not isinstance(configured, dict):
+        raise EmixError(Code.SYNTAX, str(source), "'drives' must be a table")
     drives: dict[str, list[Path]] = {}
-    for key, value in (payload.get("drives") or {}).items():
+    for key, value in configured.items():
         if isinstance(value, str):
             value = [value]
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):

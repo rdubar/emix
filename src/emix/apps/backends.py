@@ -15,6 +15,7 @@ permanent adapter wear the same interface.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import os
 from pathlib import Path
 import shutil
@@ -23,6 +24,40 @@ from typing import Protocol
 from emix.apps.session import DocumentSession, DriveLayout, flat_layout, user_area_layout
 from emix.errors import Code, EmixError
 from emix.host import run_host_command
+
+
+class Disposition(Enum):
+    """How a guest session ended, which decides whether output may be kept."""
+
+    #: Ran and exited in a way the profile calls success.
+    SUCCESS = "success"
+    #: Ran and exited some other way. Output is not trustworthy.
+    FAILED = "failed"
+    #: Stopped by the resource ceiling.
+    TIMEOUT = "timeout"
+    #: The user interrupted it.
+    INTERRUPTED = "interrupted"
+    #: Never started, or the emulator itself failed.
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True)
+class Result:
+    """What a backend did.
+
+    A bare exit status is not enough to decide whether to touch the host: a
+    program killed by the ceiling and a program that exited cleanly can both
+    leave a half-written file behind. Only :attr:`Disposition.SUCCESS` opens
+    the copy-back path.
+    """
+
+    disposition: Disposition
+    status: int = 0
+    detail: str = ""
+
+    @property
+    def succeeded(self) -> bool:
+        return self.disposition is Disposition.SUCCESS
 
 
 @dataclass(frozen=True)
@@ -54,8 +89,8 @@ class Backend(Protocol):
     def prepare(self, session: DocumentSession, application: Path, launch: Launch) -> None:
         """Lay out drives and arrange for ``launch`` to run automatically."""
 
-    def run(self, session: DocumentSession, *, timeout: float | None = None) -> int:
-        """Attach the terminal, run to exit, and return the exit status."""
+    def run(self, session: DocumentSession, *, timeout: float | None = None) -> Result:
+        """Attach the terminal, run to exit, and say how it ended."""
 
 
 def _write_submit(path: Path, commands: list[str]) -> None:
@@ -91,8 +126,13 @@ class RunCPMBackend:
     #: Environment override, checked before ``PATH``.
     ENVIRONMENT = "EMIX_RUNCPM"
 
-    def __init__(self, executable: Path | None = None) -> None:
+    def __init__(
+        self, executable: Path | None = None, success_statuses: frozenset[int] = frozenset({0})
+    ) -> None:
         self._executable = executable
+        #: Statuses this program uses to mean success. A profile may widen it;
+        #: some period software exits non-zero perfectly happily.
+        self.success_statuses = success_statuses
 
     def check(self) -> Path:
         if self._executable is not None:
@@ -147,9 +187,21 @@ class RunCPMBackend:
             commands.append(f"{session.APPLICATION_DRIVE}:EXIT.COM")
         _write_submit(target / "$$$.SUB", commands)
 
-    def run(self, session: DocumentSession, *, timeout: float | None = None) -> int:
+    def run(self, session: DocumentSession, *, timeout: float | None = None) -> Result:
         executable = self.check()
-        return run_host_command([str(executable)], cwd=session.root, timeout=timeout)
+        try:
+            status = run_host_command([str(executable)], cwd=session.root, timeout=timeout)
+        except KeyboardInterrupt:
+            return Result(Disposition.INTERRUPTED, detail="interrupted")
+        except EmixError as error:
+            beyond = "without finishing" in error.detail
+            return Result(
+                Disposition.TIMEOUT if beyond else Disposition.UNAVAILABLE,
+                detail=error.detail or str(error),
+            )
+        if status in self.success_statuses:
+            return Result(Disposition.SUCCESS, status=status)
+        return Result(Disposition.FAILED, status=status, detail=f"exit status {status}")
 
 
 class FakeBackend:
@@ -163,10 +215,12 @@ class FakeBackend:
     name = "fake"
     layout: DriveLayout = staticmethod(flat_layout)
 
-    def __init__(self, mutate: object = None) -> None:
+    def __init__(self, mutate: object = None, result: Result | None = None) -> None:
         self._mutate = mutate
         self.prepared: Launch | None = None
         self.timeout: float | None = None
+        #: Overridable by tests that need a failing guest.
+        self.result = result or Result(Disposition.SUCCESS)
 
     def check(self) -> Path:
         return Path("/nonexistent/fake-backend")
@@ -175,11 +229,11 @@ class FakeBackend:
         session.drive_dir(session.APPLICATION_DRIVE)
         self.prepared = launch
 
-    def run(self, session: DocumentSession, *, timeout: float | None = None) -> int:
+    def run(self, session: DocumentSession, *, timeout: float | None = None) -> Result:
         self.timeout = timeout
         if callable(self._mutate):
             self._mutate(session)
-        return 0
+        return self.result
 
 
 BACKENDS: dict[str, type] = {"runcpm": RunCPMBackend, "fake": FakeBackend}

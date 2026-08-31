@@ -44,10 +44,11 @@ class CpmShell(Shell):
     title = "CP/M 2.2"
     fold_input = True
     explanations: ClassVar[dict[str, str]] = {
-        "SYNTAX": (
-            "CP/M names its destination first: REN NEW=OLD and PIP NEW=OLD. "
-            "It reads as an assignment, not as a Unix argument order."
+        "REN.SYNTAX": (
+            "CP/M names its destination first: REN NEW=OLD. It reads as an "
+            "assignment, not as a Unix argument order."
         ),
+        "PIP.SYNTAX": ("PIP names its destination first: PIP NEW=OLD, like an assignment."),
         "UNKNOWN_VERB": (
             "The CCP had six built-ins: DIR, ERA, REN, SAVE, TYPE and USER. "
             "Everything else, PIP and STAT included, was a .COM file loaded "
@@ -212,6 +213,19 @@ class CpmShell(Shell):
         source = self.drives.locate(old_name, drive=old_drive)
         destination = self.drives.reserve(new_name, drive=new_drive or old_drive)
         self.drives.rename(source, destination)
+
+    @verb("SAVE", summary="NOT AVAILABLE IN EMIX", usage="SAVE N FILE")
+    def do_save(self, invocation: Invocation) -> None:
+        """The one CCP built-in Emix cannot honestly provide.
+
+        ``SAVE`` wrote N pages of the Transient Program Area to disk. Emix has
+        no TPA — it runs no 8080 — so there is nothing to save. Simulating
+        memory that does not exist would be exactly the invention the project
+        says it will not make, so this says what it is instead.
+        """
+        self.write(
+            "SAVE IS NOT AVAILABLE IN EMIX.\nIT COPIED MEMORY FROM THE TPA, AND EMIX HAS NO TPA.\n"
+        )
 
     @verb("USER", summary="SELECT A USER AREA", usage="USER N")
     def do_user(self, invocation: Invocation) -> None:

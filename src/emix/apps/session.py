@@ -19,6 +19,7 @@ So the shape here is deliberate:
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+import contextlib
 import fnmatch
 import os
 from pathlib import Path
@@ -127,16 +128,24 @@ class DocumentSession:
             if not resolved.is_file():
                 raise EmixError(Code.NO_FILE, document.name)
             guest = to_alias(resolved.name, self._taken(), self._alias_suffix)
+            staged_path = directory / guest
             try:
-                shutil.copy2(resolved, directory / guest)
+                shutil.copy2(resolved, staged_path)
             except OSError as error:
                 raise EmixError(Code.IO_ERROR, resolved.name, str(error)) from error
+            # Digest the copy, never the source a second time. Reading the
+            # source again would record the digest of whatever it says *now*,
+            # which is not necessarily what we hold: an edit landing between
+            # the copy and the hash would make the manifest describe bytes the
+            # session does not have, and the commit-time conflict check would
+            # then clear and overwrite that newer file. Hashing the copy makes
+            # the check compare the host against what we actually took.
             entry = StagedFile(
                 host=str(resolved),
                 guest=guest,
                 drive=target_drive,
-                origin_digest=digest(resolved),
-                size=resolved.stat().st_size,
+                origin_digest=digest(staged_path),
+                size=staged_path.stat().st_size,
             )
             self._staged.append(entry)
             staged.append(entry)
@@ -189,9 +198,18 @@ class DocumentSession:
             staged_path = self._layout(self.root, entry.drive) / entry.guest
             seen.add(entry.guest.upper())
             if not staged_path.is_file():
-                # Either the guest erased it, or a reserved name was never
-                # used. Deleting host files is not something a first prototype
-                # should do silently, so neither is a change.
+                # A reserved name that was never written is simply nothing.
+                # A staged document that has gone is a deletion, and the user
+                # should be told even though Emix will not act on it.
+                if entry.origin_digest is not None:
+                    found.append(
+                        Change(
+                            kind=ChangeKind.DELETED,
+                            guest=entry.guest,
+                            host=Path(entry.host),
+                            staged=staged_path,
+                        )
+                    )
                 continue
             if entry.origin_digest is None:
                 kind = ChangeKind.CREATED
@@ -237,7 +255,7 @@ class DocumentSession:
         return [
             change
             for change in changes
-            if change.kind not in {ChangeKind.UNCHANGED, ChangeKind.AUXILIARY}
+            if change.kind not in {ChangeKind.UNCHANGED, ChangeKind.AUXILIARY, ChangeKind.DELETED}
         ]
 
     def conflicts(self, changes: Sequence[Change]) -> list[Change]:
@@ -270,21 +288,68 @@ class DocumentSession:
     # -- commit ---------------------------------------------------------
 
     def commit(self, changes: Sequence[Change]) -> list[Path]:
-        """Write reviewed changes back to the host, atomically.
+        """Write reviewed changes back to the host, all of them or none.
 
-        Raises before touching anything if any change conflicts, so a commit
-        is all-or-nothing rather than half-applied.
+        Replacing one file is atomic; replacing a *set* of them is not, and no
+        portable filesystem offers a primitive that does. So this is a small
+        transaction written by hand:
+
+        1. refuse outright if anything conflicts, before touching the host;
+        2. take a rollback copy of every file that is about to be overwritten;
+        3. replace each target;
+        4. on any failure, put the originals back and remove what was created.
+
+        The residual risk is a failure *during* rollback, which cannot be
+        undone by more of the same. That case keeps the workspace and reports
+        the rollback copies by path, so nothing is lost silently.
         """
         pending = self.pending(changes)
         clashing = self.conflicts(pending)
         if clashing:
             names = ", ".join(change.host.name for change in clashing)
             raise EmixError(Code.EXISTS, names, "host files changed during the session")
-        written = []
-        for change in pending:
-            self._replace(change.staged, change.host)
-            written.append(change.host)
+
+        rollback = self.root / "rollback"
+        rollback.mkdir(exist_ok=True)
+        originals: list[tuple[Path, Path]] = []
+        created: list[Path] = []
+        written: list[Path] = []
+        try:
+            for index, change in enumerate(pending):
+                if change.host.exists():
+                    keep = rollback / f"{index:03d}-{change.host.name}"
+                    shutil.copy2(change.host, keep)
+                    originals.append((change.host, keep))
+                else:
+                    created.append(change.host)
+                self._replace(change.staged, change.host)
+                written.append(change.host)
+        except (EmixError, OSError) as error:
+            self._roll_back(originals, created, written)
+            raise EmixError(
+                Code.IO_ERROR,
+                ", ".join(path.name for path in written) or "commit",
+                f"commit failed and was rolled back: {error}",
+            ) from error
         return written
+
+    @staticmethod
+    def _roll_back(
+        originals: list[tuple[Path, Path]],
+        created: list[Path],
+        written: list[Path],
+    ) -> None:
+        """Undo a partial commit. Best effort, and never raises over the top
+        of the failure that caused it."""
+        done = set(written)
+        for target, keep in originals:
+            if target in done:
+                with contextlib.suppress(OSError):
+                    os.replace(keep, target)
+        for target in created:
+            if target in done:
+                with contextlib.suppress(OSError):
+                    target.unlink()
 
     @staticmethod
     def _replace(source: Path, destination: Path) -> None:

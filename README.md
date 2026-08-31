@@ -151,8 +151,9 @@ is shown as a reversible alias — `pyproject.toml` lists as `PYPROJ_1 TOM`, and
 `UNIX` and `DRIVES` are further Emix conveniences and are labelled as such in
 `HELP`. File versions display as `;1` but only one copy is stored.
 
-**Not yet built.** CP/M user areas, reversible 8.3 aliases, VMS directory
-syntax and real file versions, CMS `EXEC` and `XEDIT`. See
+**Not yet built.** CP/M user areas, VMS directory syntax and real file
+versions, CMS `EXEC` and `XEDIT`, and `SAVE`, which copied memory Emix does
+not have. See
 [docs/ROADMAP.md](docs/ROADMAP.md). More speculative jokes, atmosphere and optional AI
 experiments live in [docs/IDEAS.md](docs/IDEAS.md).
 
@@ -221,7 +222,7 @@ project, and the reason for everything above.
 
 ```sh
 uv sync           # create the environment
-uv run pytest     # 222 tests
+uv run pytest     # the full suite
 uv run ruff check . && uv run ruff format --check .
 uv run mypy       # strict
 ```

@@ -44,7 +44,7 @@ drive A:, the core file commands, safe host execution.
       shown as the transient programs they were
 - [x] VAX/VMS DCL personality: abbreviation, qualifiers, `DELETE` version rule
 - [x] IBM VM/CMS personality: three-token fileids, `Ready;` responses
-- [x] `uv`-based workflow, ruff, strict mypy, 62 tests, CI on macOS and Linux
+- [x] `uv`-based workflow, ruff, strict mypy, CI on macOS and Linux
 - [x] Persistent readline history per personality
 
 ## Assistance, and the line it must not cross

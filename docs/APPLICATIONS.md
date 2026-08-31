@@ -172,6 +172,70 @@ schema with invented nesting, and cheaper than a `tomli` dependency on a
 project whose pitch is having none. Persistent drive mappings should wait for
 roadmap 0.3's configuration file so there is one precedence model.
 
+## The commit guarantee, and why it is written by hand
+
+An independent review found that `commit()` claimed to be all-or-nothing and
+was not: it validated conflicts up front, then called `os.replace()` once per
+file. Each replacement is atomic on its own; the *set* was not a transaction,
+so a failure partway left some host files updated and others old.
+
+No portable filesystem offers a primitive that atomically replaces a set of
+files, so the guarantee has to be built rather than borrowed.
+
+### What was considered
+
+**Narrow the promise to one document per session.** Attractive, and briefly
+the plan — every profile today stages exactly one document. It was dropped
+because a guest can legitimately *create* files: a "save as" in an editor
+produces a second document the user does want. Narrowing would either lose
+that, or keep the same partial-commit hole under a quieter name.
+
+**Drop the promise and report what landed.** Honest, and much less work. But
+"your original survives a failure" is the reason the staging model exists at
+all, and a bridge that sometimes half-writes your documents folder is not
+worth the ceremony around it.
+
+**Preflight, replace, roll back on failure.** Chosen. Before touching
+anything, conflicts are checked across every target. Each file about to be
+overwritten is copied into the session first. Then each target is replaced;
+if any replacement fails, the originals go back and anything newly created is
+removed.
+
+### What is actually guaranteed
+
+- A commit that returns has applied every change.
+- A commit that raises has applied none of them, and the host is as it was.
+- Conflicts are detected before the first write, never partway through.
+
+### The residual risk, stated plainly
+
+Rollback can itself fail — a disk that filled, a volume that went away. More
+of the same operation cannot fix that, so Emix stops, keeps the workspace and
+its `rollback/` copies, and names the paths. Nothing is lost silently, but a
+human has to finish the job.
+
+### If this needs to be stronger later
+
+In rough order of cost:
+
+1. **Journal the intent before the first write**, so an Emix that dies
+   mid-commit can finish or undo on next launch. This is the natural partner
+   to the session-state work below, and the manifest already provides most of
+   the machinery.
+2. **A session state machine** — `preparing → staged → guest-running →
+   changes-ready → committing → committed`, with the transition persisted
+   before each irreversible step, plus `emix sessions` to list, inspect and
+   recover retained workspaces. Until that exists the manifest is diagnostic
+   metadata, not a recovery system, and the documentation should keep saying
+   so.
+3. **Single-directory commits via a staging directory swap**, where the
+   platform supports renaming a directory into place. Faster and stronger,
+   but only applicable when every target shares one directory.
+
+None of these are needed while a session commits one document plus whatever
+that program made alongside it. They become worth the cost when sessions span
+several documents, or when Emix keeps state across runs.
+
 ## Safety model
 
 1. Backends receive only configured drives.
@@ -182,8 +246,12 @@ roadmap 0.3's configuration file so there is one precedence model.
 6. Commit refuses when the host file changed during the session.
 7. The manifest lives outside every mounted drive.
 8. Network and clipboard capabilities are off, and unimplemented.
-9. **Not yet built:** a resource ceiling. This is not theoretical — TE spins
-   and floods output when stdin is not a terminal.
+9. A resource ceiling for unattended sessions. Not theoretical: TE spins and
+   floods output when stdin is not a terminal. An interactive user can always
+   interrupt, so only unwatched sessions are stopped by the clock.
+10. Guest failure never reaches the host. A crash, timeout, interrupt or
+    unexpected exit status keeps the workspace and writes nothing, because
+    partial output from a program that died is not evidence of intent.
 
 The emulator process is host software and is trusted as such. Emix's boundary
 protects the host from the *guest program*, not from a malicious emulator.

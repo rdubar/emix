@@ -90,6 +90,10 @@ def test_an_explicit_choice_still_wins(tmp_path, monkeypatch):
     from emix.host import Drive, DriveSet
     from emix.personalities.cpm import CpmShell
 
+    # The suite must not depend on the caller's environment: an ambient
+    # NO_COLOR would otherwise turn this into a contradiction of the test
+    # below, which asserts NO_COLOR wins.
+    monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("COLORFGBG", "15;0")
     drives = DriveSet([Drive.create("A", tmp_path)])
 

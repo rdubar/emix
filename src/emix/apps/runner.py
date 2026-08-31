@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 from typing import TextIO
 
-from emix.apps.backends import BACKENDS, Backend, Launch
+from emix.apps.backends import BACKENDS, Backend, Disposition, Launch, Result
 from emix.apps.manifest import Change, ChangeKind
 from emix.apps.profiles import Profile
 from emix.apps.session import DocumentSession
@@ -65,11 +65,17 @@ def _report(changes: list[Change], stream: TextIO) -> None:
     stream.write("\nDOCUMENT SESSION COMPLETE\n\n")
     pending = DocumentSession.pending(changes)
     auxiliary = [change for change in changes if change.kind is ChangeKind.AUXILIARY]
-    if not pending and not auxiliary:
+    deleted = [change for change in changes if change.kind is ChangeKind.DELETED]
+    if not pending and not auxiliary and not deleted:
         stream.write("  No changes.\n\n")
         return
     for change in pending:
         stream.write(f"  {change.kind.value:<9} {change.host.name}\n")
+    for change in deleted:
+        stream.write(
+            f"  {'DELETED':<9} {change.host.name}  "
+            "(the application removed it; the host file is untouched)\n"
+        )
     for change in auxiliary:
         # Named, so nothing is hidden; not committed, because it is the
         # application's own housekeeping rather than the user's document.
@@ -165,12 +171,20 @@ def open_session(
         # cannot, so only the latter gets a ceiling.
         unattended = not sys.stdin.isatty()
         try:
-            adapter.run(session, timeout=float(profile.timeout) if unattended else None)
+            outcome = adapter.run(session, timeout=float(profile.timeout) if unattended else None)
         except KeyboardInterrupt:
-            stream.write("\nInterrupted. Nothing has been written to the host.\n")
-            return 130
-        except EmixError as error:
-            stream.write(f"\nThe application did not finish: {error}\n")
+            outcome = Result(Disposition.INTERRUPTED, detail="interrupted")
+
+        if not outcome.succeeded:
+            # A guest that crashed, timed out or was killed may have left a
+            # half-written file behind. Its output is not evidence of what the
+            # user wanted, so the host is not touched and the workspace is
+            # kept for them to look at.
+            stream.write(f"\nThe application did not finish ({outcome.disposition.value}")
+            stream.write(f": {outcome.detail})\n" if outcome.detail else ")\n")
+            stream.write("Nothing has been written to the host.\n")
+            keep = True
+            return 130 if outcome.disposition is Disposition.INTERRUPTED else 1
 
         changes = session.changes()
         _report(changes, stream)
@@ -183,15 +197,28 @@ def open_session(
             names = ", ".join(change.host.name for change in clashing)
             stream.write(
                 f"Host files changed while the session was running: {names}\n"
-                f"Nothing was committed. The workspace is kept at {session.root}\n"
+                "Nothing was committed.\n"
             )
             keep = True
             return 1
 
         if not assume_yes:
-            answer = confirm("Save these changes to the host? [Y/n] ").strip().upper()
+            # Only guard the default prompt. A caller that supplied its own
+            # confirm — a personality shell, a test — does its own input.
+            if confirm is input and not sys.stdin.isatty():
+                # Nobody is there to answer, and committing on silence would
+                # make an unattended run the least careful path.
+                stream.write("Not committed: no terminal to confirm from. Use --yes.\n")
+                keep = True
+                return 1
+            try:
+                answer = confirm("Save these changes to the host? [Y/n] ").strip().upper()
+            except (EOFError, KeyboardInterrupt):
+                stream.write("\nNot committed.\n")
+                keep = True
+                return 130
             if answer not in {"", "Y", "YES"}:
-                stream.write(f"Discarded. The workspace is kept at {session.root}\n")
+                stream.write("Discarded.\n")
                 keep = True
                 return 0
 
@@ -200,7 +227,10 @@ def open_session(
             stream.write(f"  saved {path}\n")
         return 0
     finally:
-        if not keep:
+        if keep:
+            # M2: a kept workspace is useless if the user cannot find it.
+            stream.write(f"Workspace kept at: {session.root}\n")
+        else:
             session.discard()
 
 

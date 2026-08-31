@@ -66,6 +66,33 @@
 - CP/M lists a long host name as a reversible alias (`PYPROJ_1 TOM`) and
   accepts it back, without ever renaming the host file.
 
+### Fixed
+
+- A host file edited *during* staging could be silently overwritten on
+  commit: the manifest recorded the digest of the source read a second time
+  rather than of the copy actually taken, so the conflict check compared the
+  host against itself. The digest now describes the staged bytes.
+- A guest that crashed, timed out, was interrupted or exited unexpectedly
+  could still have its half-written output committed. Backends now report a
+  disposition, and only success opens the copy-back path.
+- Commit claimed to be all-or-nothing but replaced files one at a time. It
+  now takes rollback copies first and restores them if any replacement
+  fails. See docs/APPLICATIONS.md for the reasoning and the stronger options.
+- Application arguments bypassed the personality's filespec parsing, so
+  `TE B:NOTES.TXT` and the aliases `DIR` prints could target the wrong host
+  file. Both now go through one resolver, as typed commands do.
+- `-c` returned 0 even when the command failed, so scripts could not tell.
+- Malformed configuration produced Python tracebacks; `timeout = true` passed
+  validation because bools are ints. Shapes, ranges and unknown keys are now
+  checked, and duplicate application commands are refused by name.
+- `EXPLAIN` could describe one command while diagnosing another, and marked
+  only the first line of a multi-line error. Advice is keyed by command as
+  well as error code.
+- `NO_COLOR` was honoured only after the terminal had already been probed.
+- A file the guest deleted was reported as no change at all.
+- `SAVE` was documented as one of CP/M's six built-ins but did not exist. It
+  now explains that it copied memory Emix has no equivalent of.
+
 ### Changed
 
 - Documentation moved into `docs/`; added `AGENTS.md`.
@@ -107,50 +134,6 @@ First public release.
 - The banner reprinted on every interrupt.
 - `.upper()` and `.casefold()` were used inconsistently, so a file could be
   listed and then refused when opened.
-
-- An assistance layer that teaches rather than substitutes: `ls` at a VMS
-  prompt prints `%DCL-W-IVVERB` verbatim and then names `DIRECTORY`. Mistyped
-  verbs and file names get near-miss suggestions. Every added line carries an
-  `Emix:` marker, and nothing is ever executed on a guess.
-- Emix asks the terminal for its background colour (`COLORFGBG`, then an
-  OSC 11 query) and uses green phosphor on a dark screen, amber otherwise. It
-  never probes anything that is not an interactive terminal.
-- Hints are coloured (amber by default, `--hint-colour`, `$EMIX_HINT_COLOUR`),
-  and colour is suppressed for `$NO_COLOR` and any non-terminal output.
-- An application verb now accepts a file that does not exist yet, or no file
-  at all: `TE NEWFILE.TXT` reserves the name and brings the result home,
-  `TE` opens an empty workspace.
-- `STRICT` and `--strict/--no-strict`: authentic output only. On by default
-  for scripts and pipes, so a script never depends on a guess.
-- `EXPLAIN`, which describes the last command or failure using bundled,
-  personality-specific knowledge. Offline and deterministic — no model, no
-  network, nothing generated.
-- Output from commands the original system never had (`ABOUT`, `HELP` under
-  CP/M, `APPS`, `EXPLAIN`, `STRICT`) is printed in the hint colour, so
-  non-period output never looks like period output. Each personality decides
-  which of its verbs are period kit: VMS's `HELP` is real and stays plain,
-  CP/M's is an Emix addition and is painted.
-- Shared Emix commands (`ABOUT`, `CREDIT`, `APPS`, `STRICT`) print in each
-  personality's own casing, so CP/M shouts them like everything else. Web
-  addresses are left alone, and hints deliberately keep their normal case:
-  they are Emix's voice, not the system's.
-- Tab completion offering verbs, applications and file names in each
-  personality's own casing.
-
-- An application's own backup and scratch files (`TE.BKP`, `*.BAK`, `*.$$$`)
-  are reported as `IGNORED` rather than committed to your documents folder.
-  The patterns are per profile.
-- A resource ceiling for unattended sessions, and clean interrupt handling: a
-  Ctrl-C returns to Emix with nothing written to the host.
-- A warning when the terminal is smaller than the application expects.
-- A starter set of application profiles — TE, `ED`, MBASIC, DDT, ZEXDOC, LU —
-  and a warning in `APPS` when a profile is shadowed by a personality verb.
-- Golden-session transcripts covering all three personalities, recorded with
-  `pytest --record-golden`. Strict mode is what makes them deterministic.
-- `~/.config/emix/emix.toml`: personality, drives, hint colour and strictness
-  persist between sessions. The command line always wins.
-- CP/M lists a long host name as a reversible alias (`PYPROJ_1 TOM`) and
-  accepts it back, without ever renaming the host file.
 
 ### Changed
 

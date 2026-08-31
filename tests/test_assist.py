@@ -322,3 +322,57 @@ def test_apps_says_when_a_profile_is_shadowed_by_a_command(monkeypatch, root):
     rendered = run(shell_for("cpm", root, strict=False), "APPS")
 
     assert "SHADOWED" in rendered.upper()
+
+
+# -- the review's assistance findings ------------------------------------
+
+
+def test_every_physical_line_of_a_multiline_hint_is_marked(root):
+    """H3: a continuation line must not look like the system speaking."""
+    shell = shell_for("cms", root, strict=False)
+    run(shell, "TYPE NOPE TXT A")
+    before = shell.stdout.getvalue()
+    run(shell, "EXPLAIN")
+    explained = shell.stdout.getvalue()[len(before) :]
+
+    # CMS renders its error as two lines, the second being Ready(nnnnn);.
+    # Both are re-quoted by EXPLAIN, so both must carry the marker.
+    body = [line for line in explained.splitlines() if line.strip()]
+    assert any("Ready(" in line for line in body), explained
+    for line in body:
+        if not line.startswith("Ready;"):
+            assert line.startswith("Emix:"), line
+
+
+def test_a_failing_meta_command_does_not_steal_explains_subject(root):
+    """H3: EXPLAIN described one command while diagnosing another."""
+    rendered = run(shell_for("vms", root, strict=False), "NOPE", "STRICT MAYBE", "EXPLAIN")
+
+    assert "You typed: NOPE" in rendered
+    assert "no such command" in rendered.lower()
+    assert "version" not in rendered.lower()
+
+
+def test_explain_does_not_offer_advice_about_an_unrelated_command(root):
+    rendered = run(shell_for("cpm", root, strict=False), "REN", "EXPLAIN")
+
+    assert "destination first" in rendered
+
+
+def test_no_color_prevents_the_terminal_probe_entirely(monkeypatch, root):
+    """M1: probing a terminal whose answer we discard is pure noise."""
+    monkeypatch.setenv("NO_COLOR", "1")
+    probed = []
+    monkeypatch.setattr("emix.shell.background_is_dark", lambda *a: probed.append(True) or True)
+
+    shell = shell_for("cpm", root, strict=False)
+
+    assert shell.hint_colour == "none"
+    assert probed == []
+
+
+def test_cpm_save_says_why_it_cannot_exist(root):
+    """H4: claimed as one of the six built-ins, so it must answer for itself."""
+    rendered = run(shell_for("cpm", root, strict=False), "SAVE 1 SNAP.COM")
+
+    assert "NO TPA" in rendered.upper()

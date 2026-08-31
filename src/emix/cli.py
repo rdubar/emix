@@ -179,9 +179,12 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.command:
+        # A script must be able to tell that something failed. An interactive
+        # session carries on; a one-shot invocation reports.
+        ok = True
         for line in args.command:
-            shell.execute(line)
-        return 0
+            ok = shell.execute(line) and ok
+        return 0 if ok else 1
 
     try:
         return shell.run()

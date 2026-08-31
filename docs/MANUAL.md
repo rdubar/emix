@@ -299,6 +299,8 @@ accepted yours:
 ```text
 A>ls
 Emix: CP/M 2.2 has no ls. To list the files, use DIR.
+LETTER.TXT
+NOTES.TXT
 
 A>DIRR
 DIRR?
@@ -308,6 +310,11 @@ A>TYPE NOTEZ.TXT
 NO FILE
 Emix: Did you mean the file NOTES.TXT?
 ```
+
+Note what `ls` does there: CP/M has host fallthrough, so the hint is printed
+*and then the host `ls` runs*. Emix names the period command without blocking
+the one you typed. Under VMS and CMS, which do not fall through, the same
+line produces only the authentic error and the hint.
 
 Three rules make this safe to leave on:
 

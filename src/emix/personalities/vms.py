@@ -54,14 +54,14 @@ class VmsShell(Shell):
     # DCL has no implicit host fallthrough; use RUN or SPAWN.
     host_fallthrough = False
     explanations: ClassVar[dict[str, str]] = {
-        "SYNTAX": (
-            "DELETE requires an explicit version number, as in FILE.TXT;1. "
-            "VMS kept every version, so deleting without naming one was too "
-            "easy to get wrong."
-        ),
         "UNKNOWN_VERB": (
             "DCL verbs may be abbreviated to any unambiguous prefix, so DIR, "
             "DIRE and DIRECTORY are one command."
+        ),
+        "DELETE.SYNTAX": (
+            "DELETE requires an explicit version number, as in FILE.TXT;1. "
+            "VMS kept every version, so deleting without naming one was too "
+            "easy to get wrong."
         ),
         "DELETE": (
             "DELETE needs an explicit version, as in FILE.TXT;1. VMS kept "

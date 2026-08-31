@@ -55,6 +55,18 @@ class Invocation:
 
 
 @dataclass(frozen=True)
+class ResolvedDocument:
+    """One document an application was asked to open."""
+
+    #: The existing host file, if there is one.
+    host: Path | None = None
+    #: The host leaf name to create, if there is not.
+    new_name: str | None = None
+    #: Directory a guest-created file returns to.
+    home: Path = Path()
+
+
+@dataclass(frozen=True)
 class Verb:
     """A command in a personality's vocabulary."""
 
@@ -155,19 +167,25 @@ class Shell:
         # Colour is for a human looking at a terminal. Anywhere else it is
         # corruption: escape codes in a pipe break scripts and golden
         # transcripts alike. NO_COLOR is the cross-tool convention.
-        chosen = hint_colour or os.environ.get("EMIX_HINT_COLOUR")
-        if not chosen:
-            # Green only where we know the screen is dark. Asking costs a few
-            # milliseconds once; guessing costs legibility for the whole
-            # session.
-            chosen = default_colour(background_is_dark(self.stdin, self.stdout))
+        # Decide eligibility *before* asking the terminal anything. Probing a
+        # terminal whose answer we would then throw away writes an escape
+        # sequence for no reason, which a NO_COLOR user has explicitly asked
+        # us not to do.
         if os.environ.get("NO_COLOR") is not None or not _is_a_tty(self.stdout):
-            chosen = "none"
-        self.hint_colour = chosen
+            self.hint_colour = "none"
+        else:
+            chosen = hint_colour or os.environ.get("EMIX_HINT_COLOUR")
+            if not chosen:
+                # Green only where we know the screen is dark. Asking costs a
+                # few milliseconds once; guessing costs legibility all session.
+                chosen = default_colour(background_is_dark(self.stdin, self.stdout))
+            self.hint_colour = chosen
         #: The last line that reached dispatch, for EXPLAIN.
         self.last_invocation: Invocation | None = None
         #: The last failure, for EXPLAIN.
         self.last_error: EmixError | None = None
+        #: Whether the command in flight is one EXPLAIN should describe.
+        self.recording = True
 
     # -- vocabulary -----------------------------------------------------
 
@@ -201,6 +219,14 @@ class Shell:
 
     def render_error(self, error: EmixError) -> str:
         return f"?{error.code.name}\n"
+
+    def split_spec(self, spec: str) -> tuple[str | None, str]:
+        """Split a file specification into drive and name.
+
+        Personalities override this to understand their own syntax — CP/M's
+        ``d:name.typ``, and its reversible 8.3 aliases.
+        """
+        return None, spec
 
     def house_case(self, text: str) -> str:
         """Fold shared Emix output into this personality's own casing.
@@ -262,15 +288,21 @@ class Shell:
             raise EOFError
         return line.rstrip("\n")
 
-    def execute(self, line: str) -> None:
-        """Dispatch one line, converting expected failures into house style."""
+    def execute(self, line: str) -> bool:
+        """Dispatch one line, converting expected failures into house style.
+
+        Returns whether it succeeded, so a one-shot ``-c`` invocation can tell
+        a script what happened. An interactive session ignores this and
+        carries on, as a command processor should.
+        """
         invocation = None
         try:
             invocation = self.parse(line)
             if invocation is None:
-                return
+                return True
             found = self.lookup(invocation.verb)
-            if found is None or not found.meta:
+            self.recording = found is None or not found.meta
+            if self.recording:
                 self.last_invocation = invocation
                 self.last_error = None
             self.dispatch(invocation)
@@ -278,13 +310,19 @@ class Shell:
             # The authentic response first, verbatim and unaltered. Only then
             # may Emix add anything of its own.
             self.write(self.render_error(error))
-            self.last_error = error
+            # A failing meta command must not overwrite the invocation EXPLAIN
+            # is about, or EXPLAIN describes one command and diagnoses another.
+            if self.recording:
+                self.last_error = error
             if not self.strict:
                 self.write_hints(self.hints(error, invocation))
+            return False
         except KeyboardInterrupt:
             self.write("^C\n")
+            return False
         else:
             self.after_command(line)
+            return True
 
     def dispatch(self, invocation: Invocation) -> None:
         found = self.lookup(invocation.verb)
@@ -418,8 +456,16 @@ class Shell:
         return "\n".join(painted)
 
     def write_hints(self, lines: list[str]) -> None:
-        for line in lines:
-            self.write(self.paint(f"{self.hint_marker}{line}") + "\n")
+        """Print Emix's own lines, every physical one of them marked.
+
+        A single hint can carry an embedded newline — a re-rendered VMS error
+        with its ``-%RMS`` continuation, or a CMS message followed by
+        ``Ready;``. Marking the list item rather than the line would leave the
+        continuation looking like the system speaking.
+        """
+        for entry in lines:
+            for line in entry.split("\n"):
+                self.write(self.paint(f"{self.hint_marker}{line}") + "\n")
 
     def is_emix_verb(self, name: str) -> bool:
         """Whether this command is an Emix addition rather than period kit.
@@ -473,7 +519,18 @@ class Shell:
                 lines.append("It was handed to the host, not to this personality.")
         else:
             lines.append(self.render_error(self.last_error).strip())
-            lines.extend(explain(self.last_error.code.name, self.explanations))
+            code = self.last_error.code.name
+            found = self.lookup(self.last_invocation.verb)
+            name = found.name if found else self.last_invocation.verb.upper()
+            if found is not None and found.usage and self.last_error.code is Code.SYNTAX:
+                lines.append(f"Usage: {found.usage}")
+            # A note keyed VERB.CODE is advice about the command that actually
+            # failed. A note keyed CODE alone must be true of every command in
+            # the personality — otherwise EXPLAIN ends up telling you DELETE
+            # needs a version number when you mistyped STRICT.
+            specific = self.explanations.get(f"{name}.{code}")
+            notes = {code: specific} if specific else self.explanations
+            lines.extend(explain(code, notes))
         self.write_hints(lines)
 
     @verb("STRICT", meta=True, summary="Show or set authentic-only mode", usage="STRICT [ON|OFF]")
@@ -502,7 +559,12 @@ class Shell:
             from emix.apps import profiles
 
             try:
-                self._apps = {p.command: p for p in profiles.load().values()}
+                # A CP/M profile launched from VMS would be handed a filespec
+                # it cannot parse and a backend that does not match, so a
+                # profile is only offered where it belongs.
+                self._apps = {
+                    p.command: p for p in profiles.load().values() if p.system == self.key
+                }
             except EmixError:
                 # A broken profile file must not stop the shell from starting.
                 self._apps = {}
@@ -525,25 +587,37 @@ class Shell:
 
         document = None
         new_name = None
+        home = self.drives.default
         if invocation.args:
-            name = invocation.args[0]
-            if self.drives.exists(name):
-                document = self.drives.locate(name)
-            else:
-                # Not an error: an editor is how a file comes into existence.
-                # reserve() applies the same name and containment rules a
-                # typed command would, so this cannot escape the drive.
-                self.drives.reserve(name)
-                new_name = name
+            resolved = self.resolve_document(invocation.args[0])
+            document, new_name, home = resolved.host, resolved.new_name, resolved.home
 
         open_session(
             profile,  # type: ignore[arg-type]
             document=document,
             new_name=new_name,
-            home=self.drives.default,
+            home=home,
             stream=self.stdout,
             confirm=lambda question: "Y" if self.confirm(question) else "N",
         )
+
+    def resolve_document(self, spec: str) -> ResolvedDocument:
+        """Turn what the user typed into one host file, or one name to create.
+
+        Application arguments must go through exactly the same door as a typed
+        ``TYPE``: the personality's own filespec syntax, its drive prefixes and
+        its reversible aliases. Anything else means Emix prints a name in a
+        listing that it will not then accept — which it did, before this
+        existed.
+        """
+        drive, name = self.split_spec(spec)
+        home = self.drives.drive(drive).root if drive else self.drives.default
+        if self.drives.exists(name, drive=drive):
+            return ResolvedDocument(host=self.drives.locate(name, drive=drive), home=home)
+        # Not an error: an editor is how a file comes into existence. reserve()
+        # applies the same name and containment rules a typed command would.
+        self.drives.reserve(name, drive=drive)
+        return ResolvedDocument(new_name=name, home=home)
 
     def run_host(self, invocation: Invocation) -> None:
         """Offer the line to the host as an executable, with no shell."""

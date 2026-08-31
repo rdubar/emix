@@ -9,13 +9,21 @@ from pathlib import Path
 
 import pytest
 
-from emix.apps.backends import FakeBackend, Launch, RunCPMBackend, _write_submit
+from emix.apps.backends import (
+    Disposition,
+    FakeBackend,
+    Launch,
+    Result,
+    RunCPMBackend,
+    _write_submit,
+)
 from emix.apps.manifest import SCHEMA, ChangeKind, Manifest
 from emix.apps.names import to_alias
 from emix.apps.profiles import Profile
 from emix.apps.runner import open_document, open_session
 from emix.apps.session import DocumentSession, user_area_layout
 from emix.errors import Code, EmixError
+from emix.personalities.cpm import CpmShell
 
 
 @pytest.fixture
@@ -382,7 +390,6 @@ def installed(monkeypatch, tmp_path):
 
 def cpm_shell(root, answers: str = "Y\n"):
     from emix.host import Drive, DriveSet
-    from emix.personalities.cpm import CpmShell
 
     drives = DriveSet([Drive.create("A", root)])
     return CpmShell(drives, stdin=io.StringIO(answers), stdout=io.StringIO())
@@ -665,16 +672,14 @@ def test_an_unattended_session_gets_a_ceiling(tmp_path, home, document, monkeypa
 def test_a_timeout_is_reported_without_touching_the_host(tmp_path, home, document, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO())
 
-    class Wedged(FakeBackend):
-        def run(self, session, *, timeout=None):
-            raise EmixError(Code.IO_ERROR, "RunCPM", f"stopped after {timeout:g}s")
+    wedged = FakeBackend(result=Result(Disposition.TIMEOUT, detail="stopped after 60s"))
 
     stream = io.StringIO()
     status = open_session(
-        profile(tmp_path), document=document, backend=Wedged(), assume_yes=True, stream=stream
+        profile(tmp_path), document=document, backend=wedged, assume_yes=True, stream=stream
     )
 
-    assert status == 0
+    assert status == 1
     assert "did not finish" in stream.getvalue()
     assert document.read_text() == "original\n"
 
@@ -692,6 +697,41 @@ def test_an_interrupt_writes_nothing_to_the_host(tmp_path, home, document):
     assert status == 130
     assert "Nothing has been written" in stream.getvalue()
     assert document.read_text() == "original\n"
+
+
+def test_a_guest_that_fails_never_commits_what_it_wrote(tmp_path, home, document):
+    """B2: partial output from a crashed program is not evidence of intent."""
+
+    def half_write(session):
+        entry = session.manifest.files[0]
+        (session.drive_dir(entry.drive) / entry.guest).write_text("half a docum")
+
+    stream = io.StringIO()
+    status = open_session(
+        profile(tmp_path),
+        document=document,
+        backend=FakeBackend(mutate=half_write, result=Result(Disposition.FAILED, status=7)),
+        assume_yes=True,
+        stream=stream,
+    )
+
+    assert status == 1
+    assert document.read_text() == "original\n"
+    assert "Workspace kept at" in stream.getvalue()
+
+
+def test_a_non_zero_exit_is_a_failure_unless_the_profile_says_otherwise(tmp_path, home, document):
+    stream = io.StringIO()
+    status = open_session(
+        profile(tmp_path),
+        document=document,
+        backend=FakeBackend(result=Result(Disposition.FAILED, status=3)),
+        assume_yes=True,
+        stream=stream,
+    )
+
+    assert status == 1
+    assert "exit status" not in document.read_text()
 
 
 def test_a_small_terminal_is_warned_about(tmp_path, home, document, monkeypatch):
@@ -771,3 +811,131 @@ def test_an_unknown_alias_maps_to_nothing():
     from emix.apps.names import AliasMap
 
     assert AliasMap(["notes.txt"]).host("NOSUCH_1.TXT") is None
+
+
+# -- the review's blockers, as regressions ------------------------------
+
+
+def test_a_host_edit_during_staging_is_detected_not_overwritten(home, document, monkeypatch):
+    """B1: the manifest must describe the bytes the session actually holds."""
+    import emix.apps.session as module
+
+    real = module.shutil.copy2
+
+    def racing_copy(source, destination):
+        result = real(source, destination)
+        Path(source).write_text("somebody else edited this\n")
+        return result
+
+    monkeypatch.setattr(module.shutil, "copy2", racing_copy)
+    session = session_for(home)
+    entry = session.stage([document])[0]
+    monkeypatch.setattr(module.shutil, "copy2", real)
+    session.write_manifest()
+    (session.drive_dir(entry.drive) / entry.guest).write_text("edited in the guest\n")
+
+    assert session.conflicts(session.changes()), "the concurrent host edit must be a conflict"
+    with pytest.raises(EmixError):
+        session.commit(session.changes())
+    assert document.read_text() == "somebody else edited this\n"
+
+
+def test_a_failed_replacement_rolls_the_whole_commit_back(home, document, monkeypatch):
+    """B3: a commit is all of it or none of it."""
+    second = home / "Second document.txt"
+    second.write_text("second original\n")
+    session = session_for(home)
+    staged = session.stage([document, second])
+    session.write_manifest()
+    for entry in staged:
+        (session.drive_dir(entry.drive) / entry.guest).write_text("edited\n")
+
+    calls = {"n": 0}
+    real = DocumentSession._replace
+
+    def failing(source, destination):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("disk full")
+        return real(source, destination)
+
+    monkeypatch.setattr(DocumentSession, "_replace", staticmethod(failing))
+
+    with pytest.raises(EmixError) as caught:
+        session.commit(session.changes())
+
+    assert "rolled back" in caught.value.detail
+    assert document.read_text() == "original\n"
+    assert second.read_text() == "second original\n"
+
+
+def test_a_rollback_also_removes_files_the_commit_created(home, document, monkeypatch):
+    session = session_for(home)
+    first = session.stage([document])[0]
+    second = session.stage_new("brand-new.txt")
+    session.write_manifest()
+    (session.drive_dir(first.drive) / first.guest).write_text("edited\n")
+    (session.drive_dir(second.drive) / second.guest).write_text("new\n")
+
+    calls = {"n": 0}
+    real = DocumentSession._replace
+
+    def failing(source, destination):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("disk full")
+        return real(source, destination)
+
+    monkeypatch.setattr(DocumentSession, "_replace", staticmethod(failing))
+
+    with pytest.raises(EmixError):
+        session.commit(session.changes())
+
+    assert document.read_text() == "original\n"
+    assert not (home / "brand-new.txt").exists()
+
+
+def test_a_deletion_by_the_guest_is_reported_and_not_applied(home, document):
+    """H5: silence would let the user think nothing happened."""
+    session = session_for(home)
+    entry = session.stage([document])[0]
+    session.write_manifest()
+    (session.drive_dir(entry.drive) / entry.guest).unlink()
+
+    changes = session.changes()
+
+    assert [c.kind for c in changes] == [ChangeKind.DELETED]
+    assert DocumentSession.pending(changes) == []
+    session.commit(changes)
+    assert document.read_text() == "original\n"
+
+
+def test_a_profile_is_only_offered_to_its_own_personality(monkeypatch, home):
+    """M4: a CP/M profile handed a DCL filespec would misbehave."""
+    from emix.host import Drive, DriveSet
+    from emix.personalities.vms import VmsShell
+
+    cpm_only = Profile(
+        name="te", backend="fake", program="TE.COM", application=home, command="TE", system="cpm"
+    )
+    monkeypatch.setattr("emix.apps.profiles.load", lambda path=None: {"te": cpm_only})
+    drives = DriveSet([Drive.create("A", home)])
+
+    assert "TE" in CpmShell(drives, stdin=io.StringIO(), stdout=io.StringIO()).applications()
+    assert "TE" not in VmsShell(drives, stdin=io.StringIO(), stdout=io.StringIO()).applications()
+
+
+def test_an_application_argument_uses_the_personality_filespec(installed, home, tmp_path):
+    """B4: drive prefixes and aliases must reach the same file TYPE would."""
+    from emix.host import Drive, DriveSet
+
+    other = tmp_path / "second"
+    other.mkdir()
+    (other / "NOTES.TXT").write_text("on drive B\n")
+    (home / "pyproject.toml").write_text("[project]\n")
+    drives = DriveSet([Drive.create("A", home), Drive.create("B", other)])
+    shell = CpmShell(drives, stdin=io.StringIO("N\n"), stdout=io.StringIO())
+
+    assert shell.resolve_document("B:NOTES.TXT").host == other / "NOTES.TXT"
+    assert shell.resolve_document("PYPROJ_1.TOM").host == home / "pyproject.toml"
+    assert shell.resolve_document("BRANDNEW.TXT").new_name == "BRANDNEW.TXT"

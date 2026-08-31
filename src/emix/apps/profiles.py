@@ -15,7 +15,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
-
 import tomllib
 
 from emix.apps import names, session
@@ -23,6 +22,27 @@ from emix.errors import Code, EmixError
 
 #: Checked before the default location.
 ENVIRONMENT = "EMIX_APPS"
+
+#: Every key a profile may set. A misspelling in a config file is expensive to
+#: find by its effects, so it is refused by name instead.
+_KNOWN_KEYS = frozenset(
+    {
+        "backend",
+        "program",
+        "application",
+        "terminal",
+        "executable",
+        "command",
+        "system",
+        "notes",
+        "exit",
+        "columns",
+        "rows",
+        "timeout",
+        "auxiliary",
+        "alias-suffix",
+    }
+)
 
 _DEFAULT = Path("~/.config/emix/apps.toml")
 
@@ -37,6 +57,9 @@ class Profile:
     program: str
     #: Host directory whose contents become the application drive.
     application: Path
+    #: Personality this application belongs to. Its filenames, prompts and
+    #: backend are specific to one system, so it is only offered there.
+    system: str = "cpm"
     #: Verb that launches this application from inside a personality. Defaults
     #: to the program's stem, so ``TE.COM`` answers to ``TE``.
     command: str = ""
@@ -81,11 +104,23 @@ class Profile:
 
         program = text("program")
 
-        def number(key: str, default: int) -> int:
+        def number(key: str, default: int, low: int, high: int) -> int:
             value = table.get(key, default)
-            if not isinstance(value, int):
+            # bool is a subclass of int in Python, so `timeout = true` would
+            # otherwise validate and then behave as 1 second.
+            if isinstance(value, bool) or not isinstance(value, int):
                 raise EmixError(Code.SYNTAX, f"app.{name}.{key}", "expected a whole number")
+            if not low <= value <= high:
+                raise EmixError(
+                    Code.SYNTAX, f"app.{name}.{key}", f"expected between {low} and {high}"
+                )
             return value
+
+        unknown = set(table) - _KNOWN_KEYS
+        if unknown:
+            raise EmixError(
+                Code.SYNTAX, f"app.{name}", f"unknown key(s): {', '.join(sorted(unknown))}"
+            )
 
         def patterns(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
             value = table.get(key)
@@ -101,15 +136,16 @@ class Profile:
             backend=text("backend"),
             program=program,
             command=text("command", required=False, default=program.split(".")[0]).upper(),
+            system=text("system", required=False, default="cpm").lower(),
             application=Path(text("application")).expanduser(),
             terminal=text("terminal", required=False, default="vt100"),
             executable=Path(str(executable)).expanduser() if executable else None,
             alias_suffix=text("alias-suffix", required=False, default=names.DEFAULT_SUFFIX),
             notes=text("notes", required=False),
             exit_hint=text("exit", required=False),
-            columns=number("columns", 80),
-            rows=number("rows", 24),
-            timeout=number("timeout", 60),
+            columns=number("columns", 80, 1, 1000),
+            rows=number("rows", 24, 1, 1000),
+            timeout=number("timeout", 60, 1, 86400),
             auxiliary=patterns("auxiliary", session.DEFAULT_AUXILIARY),
         )
 
@@ -134,7 +170,22 @@ def load(path: Path | None = None) -> dict[str, Profile]:
     apps = payload.get("app", {})
     if not isinstance(apps, dict):
         raise EmixError(Code.SYNTAX, str(source), "'app' must be a table of profiles")
-    return {name: Profile.from_table(name, table) for name, table in apps.items()}
+    profiles: dict[str, Profile] = {}
+    for name, table in apps.items():
+        if not isinstance(table, dict):
+            raise EmixError(Code.SYNTAX, f"app.{name}", "expected a table, as [app.name]")
+        profile = Profile.from_table(name, table)
+        clash = next(
+            (other for other in profiles.values() if other.command == profile.command), None
+        )
+        if clash is not None:
+            raise EmixError(
+                Code.SYNTAX,
+                profile.command,
+                f"both '{clash.name}' and '{name}' claim this command",
+            )
+        profiles[name] = profile
+    return profiles
 
 
 def get(name: str, path: Path | None = None) -> Profile:
