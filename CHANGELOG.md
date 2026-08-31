@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-08-31
+
+Real historical applications, and assistance that teaches rather than
+substitutes. **Python 3.11 is now the minimum**, for `tomllib`.
 
 ### Added
 
