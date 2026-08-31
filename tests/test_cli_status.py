@@ -24,6 +24,9 @@ def emix(*arguments: str, apps: Path | None = None, cwd: Path) -> subprocess.Com
         "PYTHONPATH": str(ROOT / "src"),
         "NO_COLOR": "1",
         "EMIX_CONFIG": str(cwd / "no-such-config.toml"),
+        # A real process is outside the reach of the conftest fixture, and the
+        # failing-application test deliberately leaves its workspace behind.
+        "TMPDIR": str(cwd),
     }
     if apps is not None:
         environment["EMIX_APPS"] = str(apps)
