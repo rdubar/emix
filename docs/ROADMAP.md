@@ -47,17 +47,38 @@ drive A:, the core file commands, safe host execution.
 - [x] `uv`-based workflow, ruff, strict mypy, 62 tests, CI on macOS and Linux
 - [x] Persistent readline history per personality
 
+## Assistance, and the line it must not cross
+
+Emix helps, under three rules that keep the help from eating the product:
+
+1. **The authentic response comes first, verbatim.** A hint is added below it,
+   never in place of it, and never reworded. There is a test asserting that
+   assisted output starts with exactly the strict output.
+2. **Hints carry the `Emix:` marker**, so invented prose is never mistaken for
+   a period diagnostic.
+3. **Nothing is executed on a guess.** A hint names the real command; the user
+   types it. That is what makes a convenience a lesson.
+
+Strict mode (`--strict`, or `STRICT ON`) removes tiers 2 and 3 entirely. It is
+on by default for scripts and pipes, because a script must not depend on a
+guess, and it is the deterministic baseline the golden-transcript tests need.
+
+Completion is exempt: it changes what you type, never what runs, so it stays on
+even in strict mode — and completing `DIR` to `DIRECTORY` is itself a way of
+learning the vocabulary.
+
 ## 0.3 — depth in the personalities we have
 
 - [ ] CP/M user areas (`USER 0`–`15`) as a real, optional view
-- [ ] Reversible 8.3 aliases: show `PYPROJ~1.TOM`, accept it back, never
-      rename the host file
+- [x] Reversible 8.3 aliases: `DIR` shows `PYPROJ_1.TOM`, `TYPE` accepts it
+      back, and the host file is never renamed
 - [ ] VMS directory syntax — `[DIR.SUB]`, `[-]`, `SET DEFAULT` across devices
 - [ ] VMS file versions backed by the host, opt-in, with a retention limit
 - [ ] CMS `EXEC` files and a minimal `XEDIT`
-- [ ] Golden-session tests: feed a script, compare a full transcript
-- [ ] `MOUNT` at runtime, and a config file so drives persist between sessions
-- [ ] Tab completion that offers names in the personality's own casing
+- [x] Golden-session tests: feed a script, compare a full transcript
+- [ ] `MOUNT` at runtime (a config file now persists drives, colour and
+      strictness: `~/.config/emix/emix.toml`)
+- [x] Tab completion that offers names in the personality's own casing
 
 ## 0.4 — the fourth personality
 
@@ -72,6 +93,15 @@ Candidates, in order of preference:
    Unix. `ed`, no job control, terse errors.
 
 ## 0.5 — running real CP/M binaries
+
+> **Reordered, not abandoned.** [APPLICATIONS.md](APPLICATIONS.md) reaches the
+> same destination through an external emulator first, because that answers
+> the product question — does this feel delightful? — before the expensive
+> work starts. The two arguments below still hold, and the staging machinery
+> that an external backend requires is the measured cost of deferring them.
+> Two corrections recorded there: the performance worry below targets games
+> rather than editors, and a BDOS should be written against RunCPM's
+> accumulated compatibility fixes, not the specification alone.
 
 This is the point where Emix stops being only a compatibility shell, and the
 one place binary emulation earns its cost. The plan is smaller than it sounds,
@@ -200,10 +230,11 @@ would be a different project, and it should be honest about being one.
 
 ## Questions still open
 
-- Is Emix a playful daily shell or an educational environment? The code has
-  quietly answered "daily shell" — `UNIX`, host fallthrough and a `STAT` that
-  reports real host bytes are not museum behaviour. Worth confirming, because
-  it settles most of the authenticity trade-offs below it.
+~~- Is Emix a playful daily shell or an educational environment?~~
+  **Answered.** Emix is a serious way to explore how these systems felt.
+  Convenience is scaffolding, and scaffolding has to teach rather than
+  substitute — which is why `ls` prints CP/M's own `LS?` and *then* names
+  `DIR`, instead of quietly running `DIR`. See "Assistance" below.
 - Should a personality be able to ship small built-in programs, so `STAT`
   becomes a transient rather than a verb? Required before 0.5 makes `.COM`
   dispatch natural.

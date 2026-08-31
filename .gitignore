@@ -9,3 +9,6 @@ htmlcov/
 .venv/
 build/
 dist/
+
+# Local, uncommitted agent notes
+AGENTS.local.md
