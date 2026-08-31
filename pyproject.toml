@@ -7,7 +7,7 @@ name = "emix-shell"
 dynamic = ["version"]
 description = "Historical computer personalities — CP/M, VMS, VM/CMS — over a modern Unix host"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Roger Dubar" }]
@@ -19,7 +19,6 @@ classifiers = [
   "Intended Audience :: Education",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -75,7 +74,7 @@ force-sort-within-sections = true
 known-first-party = ["emix"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = ["src/emix"]
 strict = true
 warn_unreachable = true

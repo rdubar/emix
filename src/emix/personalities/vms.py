@@ -15,8 +15,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
+from typing import ClassVar
 
 from emix import __version__
+from emix.assist import Concept
 from emix.errors import Code, EmixError
 from emix.host import case_collisions
 from emix.shell import Invocation, Shell, verb
@@ -51,6 +53,35 @@ class VmsShell(Shell):
     title = "OpenVMS"
     # DCL has no implicit host fallthrough; use RUN or SPAWN.
     host_fallthrough = False
+    explanations: ClassVar[dict[str, str]] = {
+        "SYNTAX": (
+            "DELETE requires an explicit version number, as in FILE.TXT;1. "
+            "VMS kept every version, so deleting without naming one was too "
+            "easy to get wrong."
+        ),
+        "UNKNOWN_VERB": (
+            "DCL verbs may be abbreviated to any unambiguous prefix, so DIR, "
+            "DIRE and DIRECTORY are one command."
+        ),
+        "DELETE": (
+            "DELETE needs an explicit version, as in FILE.TXT;1. VMS kept "
+            "every version of a file, so a delete without one was too easy to "
+            "get wrong."
+        ),
+    }
+    translations: ClassVar[dict[Concept, str]] = {
+        Concept.LIST: "DIRECTORY",
+        Concept.SHOW: "TYPE",
+        # The version number is the whole lesson; suggesting a bare DELETE
+        # would just produce the next error.
+        Concept.DELETE: "DELETE FILE.TXT;1 (the version number is required)",
+        Concept.COPY: "COPY",
+        Concept.RENAME: "RENAME",
+        Concept.HELP: "HELP",
+        Concept.QUIT: "LOGOUT",
+        Concept.WHERE: "SHOW DEFAULT",
+        Concept.CHDIR: "SET DEFAULT",
+    }
 
     def banner(self) -> str:
         return (

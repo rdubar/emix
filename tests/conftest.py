@@ -25,3 +25,12 @@ def make_shell(personality, drives, script: str = ""):
     output = io.StringIO()
     shell = personality(drives, stdin=io.StringIO(script), stdout=output)
     return shell, output
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--record-golden",
+        action="store_true",
+        default=False,
+        help="rewrite the golden transcripts from this run",
+    )

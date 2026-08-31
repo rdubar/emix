@@ -267,14 +267,23 @@ def case_collisions(entries: Iterable[Path]) -> set[str]:
     return {entry.name for entry in entries if counted[entry.name.casefold()] > 1}
 
 
-def run_host_command(argv: list[str], *, cwd: Path) -> int:
-    """Run a host executable directly. No shell is involved, ever."""
+def run_host_command(argv: list[str], *, cwd: Path, timeout: float | None = None) -> int:
+    """Run a host executable directly. No shell is involved, ever.
+
+    ``timeout`` is for guests nobody is watching. An interactive user can
+    always press Ctrl-C; an unattended one cannot, and a wedged program with
+    no terminal to read from will happily spin forever.
+    """
     if not argv:
         return 0
     try:
-        completed = subprocess.run(argv, cwd=cwd, check=False)  # noqa: S603
+        completed = subprocess.run(argv, cwd=cwd, check=False, timeout=timeout)  # noqa: S603
     except FileNotFoundError:
         raise EmixError(Code.UNKNOWN_VERB, argv[0]) from None
+    except subprocess.TimeoutExpired as error:
+        raise EmixError(
+            Code.IO_ERROR, argv[0], f"stopped after {timeout:g}s without finishing"
+        ) from error
     except OSError as error:
         raise EmixError(Code.IO_ERROR, argv[0], str(error)) from error
     return completed.returncode

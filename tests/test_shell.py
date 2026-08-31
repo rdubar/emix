@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from emix import __version__
 from emix.errors import Code, EmixError
 from emix.personalities.cpm import CpmShell
 from emix.personalities.vms import VmsShell
@@ -66,7 +67,34 @@ def test_exact_name_beats_a_longer_verb_it_prefixes(drives):
 
 def test_verbs_are_inherited_from_base_personalities(drives):
     shell, _ = toy(drives)
-    assert {found.name for found in shell.verbs} >= {"DELETE", "DELIVER", "QUIT"}
+    assert {found.name for found in shell.verbs} >= {
+        "ABOUT",
+        "CREDIT",
+        "DELETE",
+        "DELIVER",
+        "QUIT",
+    }
+
+
+def test_about_identifies_version_and_active_personality(drives):
+    shell, output = toy(drives)
+
+    shell.execute("ABOUT")
+
+    rendered = output.getvalue()
+    assert f"Emix {__version__}" in rendered
+    assert "Active personality: Emix (toy)" in rendered
+    assert "github.com/rdubar/emix" in rendered
+
+
+def test_credit_has_a_plural_alias(drives):
+    shell, output = toy(drives)
+
+    shell.execute("CREDITS")
+
+    rendered = output.getvalue()
+    assert "Roger Dubar" in rendered
+    assert "MIT License" in rendered
 
 
 def test_banner_is_written_once_per_session(drives):

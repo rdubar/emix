@@ -18,9 +18,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 from emix import __version__
+from emix.assist import Concept
 from emix.errors import Code, EmixError
 from emix.host import case_collisions
 from emix.shell import Invocation, Shell, verb
@@ -46,6 +47,22 @@ class CmsShell(Shell):
     key = "cms"
     title = "VM/CMS"
     host_fallthrough = False
+    explanations: ClassVar[dict[str, str]] = {
+        "SYNTAX": (
+            "A CMS file is three words: FILENAME FILETYPE FILEMODE. The "
+            "filemode is the disk letter and is often left to default to A."
+        ),
+    }
+    translations: ClassVar[dict[Concept, str]] = {
+        Concept.LIST: "LISTFILE",
+        Concept.SHOW: "TYPE",
+        Concept.DELETE: "ERASE",
+        Concept.COPY: "COPYFILE",
+        Concept.RENAME: "RENAME",
+        Concept.HELP: "HELP",
+        Concept.QUIT: "LOGOFF",
+        Concept.WHERE: "QUERY DISK",
+    }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

@@ -9,18 +9,29 @@ Personalities subclass :class:`Shell` and declare verbs with :func:`verb`.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 import contextlib
 from dataclasses import dataclass, field
+import io
 import os
 from pathlib import Path
 import re
 import shlex
 import sys
-from typing import TextIO
+from typing import ClassVar, TextIO
 
+from emix import __version__
+from emix.assist import (
+    Concept,
+    colourise,
+    default_colour,
+    did_you_mean,
+    explain,
+    translation_hint,
+)
 from emix.errors import Code, EmixError
 from emix.host import DriveSet, run_host_command
+from emix.terminal import background_is_dark
 
 
 @dataclass(frozen=True)
@@ -57,6 +68,10 @@ class Verb:
     min_abbrev: int | None = None
     #: Hide from the command summary without removing the verb.
     hidden: bool = False
+    #: An Emix command *about* the session rather than part of it. Meta verbs
+    #: do not become "the last command", so EXPLAIN describes what you were
+    #: actually doing rather than describing itself.
+    meta: bool = False
 
     def matches(self, typed: str) -> bool:
         typed = typed.upper()
@@ -75,6 +90,7 @@ def verb(
     aliases: Sequence[str] = (),
     min_abbrev: int | None = None,
     hidden: bool = False,
+    meta: bool = False,
 ) -> Callable[[Callable[..., bool | None]], Callable[..., bool | None]]:
     """Mark a method as a command in the enclosing personality."""
 
@@ -87,6 +103,7 @@ def verb(
             aliases=tuple(alias.upper() for alias in aliases),
             min_abbrev=min_abbrev,
             hidden=hidden,
+            meta=meta,
         )
         return function
 
@@ -104,6 +121,15 @@ class Shell:
     host_fallthrough = True
     #: Whether input is folded to upper case before dispatch.
     fold_input = True
+    #: What this personality calls each :class:`~emix.assist.Concept`. Empty
+    #: means Emix stays silent rather than inventing an equivalent.
+    translations: ClassVar[dict[Concept, str]] = {}
+    #: What this personality wants to add to an explanation of each error
+    #: code, beyond :data:`~emix.assist.GENERAL`.
+    explanations: ClassVar[dict[str, str]] = {}
+    #: Marker on every assisted line. It must not resemble a period
+    #: diagnostic, or the assistance starts lying about history.
+    hint_marker = "Emix: "
 
     def __init__(
         self,
@@ -112,6 +138,8 @@ class Shell:
         stdin: TextIO | None = None,
         stdout: TextIO | None = None,
         history: Path | None = None,
+        strict: bool | None = None,
+        hint_colour: str | None = None,
     ) -> None:
         self.drives = drives
         self.stdin = stdin or sys.stdin
@@ -120,6 +148,26 @@ class Shell:
         self.history_path = history
         self.verbs: list[Verb] = self._collect_verbs()
         self.running = True
+        self._apps: dict[str, object] | None = None
+        # Scripts must not depend on a guess, so anything non-interactive is
+        # strict unless the caller says otherwise.
+        self.strict = (not self.interactive) if strict is None else strict
+        # Colour is for a human looking at a terminal. Anywhere else it is
+        # corruption: escape codes in a pipe break scripts and golden
+        # transcripts alike. NO_COLOR is the cross-tool convention.
+        chosen = hint_colour or os.environ.get("EMIX_HINT_COLOUR")
+        if not chosen:
+            # Green only where we know the screen is dark. Asking costs a few
+            # milliseconds once; guessing costs legibility for the whole
+            # session.
+            chosen = default_colour(background_is_dark(self.stdin, self.stdout))
+        if os.environ.get("NO_COLOR") is not None or not _is_a_tty(self.stdout):
+            chosen = "none"
+        self.hint_colour = chosen
+        #: The last line that reached dispatch, for EXPLAIN.
+        self.last_invocation: Invocation | None = None
+        #: The last failure, for EXPLAIN.
+        self.last_error: EmixError | None = None
 
     # -- vocabulary -----------------------------------------------------
 
@@ -154,6 +202,15 @@ class Shell:
     def render_error(self, error: EmixError) -> str:
         return f"?{error.code.name}\n"
 
+    def house_case(self, text: str) -> str:
+        """Fold shared Emix output into this personality's own casing.
+
+        Only output the user *asked for* passes through here. Unsolicited
+        hints keep their normal case deliberately: they are Emix's voice
+        rather than the system's, and looking different is the point.
+        """
+        return text
+
     def after_command(self, line: str) -> None:
         """Hook for personalities that print something after every command."""
 
@@ -181,6 +238,7 @@ class Shell:
     def run(self) -> int:
         """Read, evaluate and print until the personality stops."""
         self._enable_history()
+        self._enable_completion()
         self.write(self.banner())
         while self.running:
             try:
@@ -206,13 +264,23 @@ class Shell:
 
     def execute(self, line: str) -> None:
         """Dispatch one line, converting expected failures into house style."""
+        invocation = None
         try:
             invocation = self.parse(line)
             if invocation is None:
                 return
+            found = self.lookup(invocation.verb)
+            if found is None or not found.meta:
+                self.last_invocation = invocation
+                self.last_error = None
             self.dispatch(invocation)
         except EmixError as error:
+            # The authentic response first, verbatim and unaltered. Only then
+            # may Emix add anything of its own.
             self.write(self.render_error(error))
+            self.last_error = error
+            if not self.strict:
+                self.write_hints(self.hints(error, invocation))
         except KeyboardInterrupt:
             self.write("^C\n")
         else:
@@ -221,12 +289,261 @@ class Shell:
     def dispatch(self, invocation: Invocation) -> None:
         found = self.lookup(invocation.verb)
         if found is not None:
-            if found.handler(self, invocation):
+            if self.is_emix_verb(found.name):
+                with self._painted_output():
+                    stop = found.handler(self, invocation)
+            else:
+                stop = found.handler(self, invocation)
+            if stop:
                 self.running = False
+            return
+        application = self.lookup_app(invocation.verb)
+        if application is not None:
+            self.run_app(application, invocation)
             return
         if not self.host_fallthrough:
             raise EmixError(Code.UNKNOWN_VERB, invocation.verb)
+        # A host command that works still teaches nothing about the era, so
+        # the lesson goes above it rather than in place of it. The command
+        # runs either way: assistance informs, it never obstructs. Only a
+        # translation is worth saying here — a did-you-mean would be nonsense
+        # about something that is going to succeed.
+        if not self.strict:
+            translated = translation_hint(self.title, invocation.verb, self.translations)
+            if translated:
+                self.write_hints([translated])
         self.run_host(invocation)
+
+    # -- shared Emix commands ------------------------------------------
+
+    @verb("ABOUT", meta=True, summary="Describe Emix", usage="ABOUT")
+    def do_about(self, invocation: Invocation) -> None:
+        """Describe the project without pretending to be a period command."""
+        self._require_no_arguments(invocation)
+        self.write(
+            self.house_case(
+                f"Emix {__version__}\n"
+                "Historical computer personalities over a modern Unix host.\n"
+                f"Active personality: {self.title} ({self.key})\n"
+                "Emix recreates the interaction, not the original hardware or binaries.\n"
+                "https://github.com/rdubar/emix\n"
+            )
+        )
+
+    @verb(
+        "CREDIT",
+        meta=True,
+        summary="Show Emix authorship and licence",
+        usage="CREDIT",
+        aliases=("CREDITS",),
+    )
+    def do_credit(self, invocation: Invocation) -> None:
+        """Keep project credit available from every personality."""
+        self._require_no_arguments(invocation)
+        self.write(
+            self.house_case(
+                "Emix was created by Roger Dubar.\n"
+                "Copyright (c) 2026 Roger Dubar.\n"
+                "Released under the MIT License.\n"
+                "Contributors and source: https://github.com/rdubar/emix\n"
+            )
+        )
+
+    @verb("APPS", meta=True, summary="List installed historical applications", usage="APPS")
+    def do_apps(self, invocation: Invocation) -> None:
+        """Emix convenience: no historical system had a concept of this."""
+        self._require_no_arguments(invocation)
+        installed = self.applications()
+        if not installed:
+            self.write(
+                self.house_case(
+                    "No applications configured.\n"
+                    "Run 'emix apps' from the host shell for a configuration template.\n"
+                )
+            )
+            return
+        for command, profile in sorted(installed.items()):
+            name = getattr(profile, "name", "?")
+            program = getattr(profile, "program", "?")
+            # Verbs win over applications, so a profile named after one would
+            # never run. Saying so beats leaving the user to wonder.
+            shadowed = "  (SHADOWED BY A COMMAND)" if self.lookup(command) else ""
+            self.write(self.house_case(f"{command:<10} {program:<14} {name}{shadowed}\n"))
+        self.write(self.house_case("\nType a command with one file name to open it.\n"))
+
+    @staticmethod
+    def _require_no_arguments(invocation: Invocation) -> None:
+        if invocation.args or invocation.qualifiers:
+            raise EmixError(Code.SYNTAX, invocation.verb)
+
+    # -- assistance ------------------------------------------------------
+
+    def hints(self, error: EmixError, invocation: Invocation | None) -> list[str]:
+        """Suggestions to print under an authentic error. Never instructions."""
+        if error.code is Code.UNKNOWN_VERB and invocation is not None:
+            return self._verb_hints(invocation.verb)
+        if error.code in {Code.NO_FILE, Code.NOT_A_FILE} and error.subject:
+            return self._file_hints(error.subject)
+        return []
+
+    def _verb_hints(self, verb: str) -> list[str]:
+        translated = translation_hint(self.title, verb, self.translations)
+        if translated:
+            return [translated]
+        known = [found.name for found in self.verbs if not found.hidden]
+        known.extend(self.applications())
+        suggestion = did_you_mean(verb, known)
+        return [suggestion] if suggestion else []
+
+    def _file_hints(self, subject: str) -> list[str]:
+        try:
+            names = [entry.name for entry in self.drives.match("*")]
+        except EmixError:
+            return []
+        suggestion = did_you_mean(subject, names, noun="file")
+        return [suggestion] if suggestion else []
+
+    def paint(self, text: str) -> str:
+        """Colour whole lines that are Emix speaking, not the system.
+
+        Line by line, so the colour closes before every newline: a screen
+        interrupted mid-write is left in a sane state.
+        """
+        if self.hint_colour == "none":
+            return text
+        painted = [
+            line if not line.strip() or "\033[" in line else colourise(line, self.hint_colour)
+            for line in text.split("\n")
+        ]
+        return "\n".join(painted)
+
+    def write_hints(self, lines: list[str]) -> None:
+        for line in lines:
+            self.write(self.paint(f"{self.hint_marker}{line}") + "\n")
+
+    def is_emix_verb(self, name: str) -> bool:
+        """Whether this command is an Emix addition rather than period kit.
+
+        Its output is painted, because output no real machine could have
+        produced should not look like output a real machine produced.
+        """
+        found = self.lookup(name)
+        return bool(found and found.meta)
+
+    @contextlib.contextmanager
+    def _painted_output(self) -> Iterator[None]:
+        """Capture a verb's output and colour it as Emix's own voice."""
+        buffer = io.StringIO()
+        original = self.stdout
+        self.stdout = buffer
+        try:
+            yield
+        finally:
+            self.stdout = original
+            captured = buffer.getvalue()
+            if captured:
+                self.write(self.paint(captured))
+
+    @verb("EXPLAIN", meta=True, summary="Explain the last command or error", usage="EXPLAIN")
+    def do_explain(self, invocation: Invocation) -> None:
+        """Emix convenience, grounded in what just happened and nothing else.
+
+        This is deliberately offline and deterministic. It reads the last
+        invocation and the last error, and says what this personality does and
+        why. Nothing is generated, so nothing can be invented.
+        """
+        self._require_no_arguments(invocation)
+        if self.last_invocation is None:
+            self.write_hints(["Nothing has run yet in this session."])
+            return
+        lines = [f"You typed: {self.last_invocation.verb}"]
+        if self.last_error is None:
+            found = self.lookup(self.last_invocation.verb)
+            if found is not None:
+                lines.append(f"{found.name} — {found.summary}.")
+                if found.usage:
+                    lines.append(f"Usage: {found.usage}")
+                if found.min_abbrev:
+                    shortest = found.name[: found.min_abbrev]
+                    lines.append(f"It abbreviates to {shortest} or any longer prefix.")
+                note = self.explanations.get(found.name)
+                if note:
+                    lines.append(note)
+            else:
+                lines.append("It was handed to the host, not to this personality.")
+        else:
+            lines.append(self.render_error(self.last_error).strip())
+            lines.extend(explain(self.last_error.code.name, self.explanations))
+        self.write_hints(lines)
+
+    @verb("STRICT", meta=True, summary="Show or set authentic-only mode", usage="STRICT [ON|OFF]")
+    def do_strict(self, invocation: Invocation) -> None:
+        """Emix convenience: no historical system had a concept of this."""
+        if not invocation.args:
+            state = "ON" if self.strict else "OFF"
+            self.write(self.house_case(f"STRICT {state}\n"))
+            return
+        if len(invocation.args) != 1:
+            raise EmixError(Code.SYNTAX, invocation.verb)
+        setting = invocation.args[0].upper()
+        if setting not in {"ON", "OFF"}:
+            raise EmixError(Code.SYNTAX, invocation.verb, "expected ON or OFF")
+        self.strict = setting == "ON"
+        if self.strict:
+            self.write(self.house_case("STRICT ON. Emix will add nothing to authentic output.\n"))
+        else:
+            self.write(self.house_case("STRICT OFF. Emix may add hints below authentic output.\n"))
+
+    # -- installed applications -----------------------------------------
+
+    def applications(self) -> dict[str, object]:
+        """Configured application profiles, keyed by their launch verb."""
+        if self._apps is None:
+            from emix.apps import profiles
+
+            try:
+                self._apps = {p.command: p for p in profiles.load().values()}
+            except EmixError:
+                # A broken profile file must not stop the shell from starting.
+                self._apps = {}
+        return self._apps
+
+    def lookup_app(self, verb: str) -> object | None:
+        return self.applications().get(verb.upper())
+
+    def run_app(self, profile: object, invocation: Invocation) -> None:
+        """Open a file from the current drive in a historical application.
+
+        The filename is resolved through :class:`~emix.host.DriveSet` first,
+        so an application reaches exactly the files a typed ``TYPE`` would:
+        inside the drive, after symlinks, case folded.
+        """
+        from emix.apps.runner import open_session
+
+        if len(invocation.args) > 1:
+            raise EmixError(Code.SYNTAX, invocation.verb, "expected at most one file name")
+
+        document = None
+        new_name = None
+        if invocation.args:
+            name = invocation.args[0]
+            if self.drives.exists(name):
+                document = self.drives.locate(name)
+            else:
+                # Not an error: an editor is how a file comes into existence.
+                # reserve() applies the same name and containment rules a
+                # typed command would, so this cannot escape the drive.
+                self.drives.reserve(name)
+                new_name = name
+
+        open_session(
+            profile,  # type: ignore[arg-type]
+            document=document,
+            new_name=new_name,
+            home=self.drives.default,
+            stream=self.stdout,
+            confirm=lambda question: "Y" if self.confirm(question) else "N",
+        )
 
     def run_host(self, invocation: Invocation) -> None:
         """Offer the line to the host as an executable, with no shell."""
@@ -251,6 +568,50 @@ class Shell:
             answer = self.stdin.readline()
             self.write(answer)
         return answer.strip().upper() in {"Y", "YES"}
+
+    # -- completion -------------------------------------------------------
+
+    def completions(self, text: str, line: str) -> list[str]:
+        """Candidates for ``text``, offered in this personality's own casing.
+
+        Completion is the one assistance that costs authenticity nothing: it
+        changes what you type, never what runs. So it stays on even in strict
+        mode, and it deliberately offers period spellings — completing to
+        ``DIRECTORY`` is itself a way of learning the vocabulary.
+        """
+        first_word = not line[: len(line) - len(text)].strip()
+        found: list[str] = []
+        if first_word:
+            found.extend(verb.name for verb in self.verbs if not verb.hidden)
+            found.extend(self.applications())
+        else:
+            with contextlib.suppress(EmixError):
+                found.extend(entry.name for entry in self.drives.match("*"))
+        cased = [name.upper() if self.fold_input else name for name in found]
+        prefix = text.upper() if self.fold_input else text
+        return sorted({name for name in cased if name.startswith(prefix)})
+
+    def _completer(self, text: str, state: int) -> str | None:
+        try:
+            import readline
+
+            matches = self.completions(text, readline.get_line_buffer())
+        except Exception:  # pragma: no cover - completion must never crash input
+            return None
+        return matches[state] if state < len(matches) else None
+
+    def _enable_completion(self) -> None:
+        if not self.interactive:
+            return
+        try:
+            import readline
+        except ImportError:  # pragma: no cover - readline is absent on some hosts
+            return
+        readline.set_completer(self._completer)
+        readline.set_completer_delims(" \t\n=;")
+        # libedit ships on macOS and spells its binding differently.
+        binding = "bind ^I rl_complete" if "libedit" in readline.__doc__ else "tab: complete"
+        readline.parse_and_bind(binding)
 
     # -- readline history ------------------------------------------------
 

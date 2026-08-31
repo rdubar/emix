@@ -1,0 +1,18 @@
+	EMIX X.Y.Z  VAX/VMS Personality
+
+	Last interactive login on DD-MMM-YYYY HH:MM:SS
+
+$ 
+Directory A:[000000]
+
+NOTES.TXT;1
+PYPROJECT.TOML;1
+REPORT.TXT;1
+
+Total of 3 files.
+
+$ first line
+second line
+$ %DELETE-W-NOVER, explicit version number required
+$   A:[000000]
+$   EMIX       job terminated at DD-MMM-YYYY HH:MM:SS

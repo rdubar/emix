@@ -11,8 +11,12 @@ that no real CP/M ever had.
 from __future__ import annotations
 
 from collections.abc import Iterable
+import re
+from typing import ClassVar
 
 from emix import __version__
+from emix.apps.names import AliasMap
+from emix.assist import Concept
 from emix.errors import Code, EmixError
 from emix.host import case_collisions, terminal_width
 from emix.shell import Invocation, Shell, verb
@@ -39,6 +43,31 @@ class CpmShell(Shell):
     key = "cpm"
     title = "CP/M 2.2"
     fold_input = True
+    explanations: ClassVar[dict[str, str]] = {
+        "SYNTAX": (
+            "CP/M names its destination first: REN NEW=OLD and PIP NEW=OLD. "
+            "It reads as an assignment, not as a Unix argument order."
+        ),
+        "UNKNOWN_VERB": (
+            "The CCP had six built-ins: DIR, ERA, REN, SAVE, TYPE and USER. "
+            "Everything else, PIP and STAT included, was a .COM file loaded "
+            "from disk."
+        ),
+    }
+    translations: ClassVar[dict[Concept, str]] = {
+        Concept.LIST: "DIR",
+        Concept.SHOW: "TYPE",
+        Concept.DELETE: "ERA",
+        # PIP takes its destination first, which is the surprise worth naming.
+        Concept.COPY: "PIP NEW=OLD",
+        Concept.RENAME: "REN NEW=OLD",
+        Concept.HELP: "HELP",
+        Concept.QUIT: "EXIT",
+        Concept.CLEAR: "CLS",
+        Concept.WHERE: "DRIVES",
+        # CP/M 2.2 had no directories at all. Saying so teaches more than a
+        # substitute would.
+    }
 
     def banner(self) -> str:
         return (
@@ -58,13 +87,55 @@ class CpmShell(Shell):
             text = f"{text}: {error.detail}"
         return text + "\n"
 
+    #: What CP/M 2.2 actually shipped. Everything else in the vocabulary is
+    #: an Emix addition, and :meth:`do_help` says so in as many words.
+    PERIOD: ClassVar[frozenset[str]] = frozenset(
+        {"DIR", "ERA", "ERASE", "REN", "RENAME", "SAVE", "TYPE", "USER", "PIP", "STAT"}
+    )
+
+    def is_emix_verb(self, name: str) -> bool:
+        return name.upper() not in self.PERIOD
+
+    def house_case(self, text: str) -> str:
+        """CP/M shouted. Web addresses do not, because a folded path can be
+        wrong, and a listing that cannot be used is worse than an inconsistent
+        one — the same rule that keeps long file names unfolded."""
+        # Split on runs of whitespace *keeping them*, so a word ending a line
+        # is not glued to the URL that starts the next one.
+        return "".join(part if "://" in part else part.upper() for part in re.split(r"(\s+)", text))
+
     # -- file specifications --------------------------------------------
 
     def split_spec(self, spec: str) -> tuple[str | None, str]:
-        """Split a CP/M ``d:name.typ`` specification into drive and name."""
-        if len(spec) >= 2 and spec[1] == ":" and spec[0].isalpha():
-            return spec[0].upper(), spec[2:]
-        return None, spec
+        """Split a CP/M ``d:name.typ`` specification into drive and name.
+
+        This is also where an 8.3 alias becomes a host name again. Every CP/M
+        command parses its filespec here, so the translation is written once
+        and no verb can forget it.
+        """
+        drive, name = (spec[0].upper(), spec[2:]) if _has_drive(spec) else (None, spec)
+        return drive, self.unalias(name, drive)
+
+    def aliases(self, drive: str | None = None) -> AliasMap:
+        """8.3 names for everything currently visible on a drive."""
+        try:
+            entries = self.drives.match("*", drive=drive)
+        except EmixError:
+            return AliasMap(())
+        collisions = case_collisions(entries)
+        return AliasMap(entry.name for entry in entries if entry.name not in collisions)
+
+    def unalias(self, name: str, drive: str | None = None) -> str:
+        """Turn ``PYPROJ_1.TOM`` back into ``pyproject.toml``.
+
+        A real host name always wins, so this can only ever add a way to
+        reach a file, never take one away.
+        """
+        if not name or "*" in name or "?" in name:
+            return name
+        if self.drives.exists(name, drive=drive):
+            return name
+        return self.aliases(drive).host(name) or name
 
     def _one(self, invocation: Invocation, default: str | None = None) -> str:
         if not invocation.args:
@@ -88,10 +159,11 @@ class CpmShell(Shell):
         # CP/M 2.2 printed four columns of "d: NAME     TYP" and no sizes.
         columns = max(1, min(4, terminal_width() // 18))
         collisions = case_collisions(entries)
-        cells = [
-            f"{letter}: {_eight_three(entry.name, verbatim=entry.name in collisions)}"
-            for entry in entries
-        ]
+        aliases = self.aliases(drive)
+        cells = []
+        for entry in entries:
+            shown = _eight_three(aliases.alias(entry.name), verbatim=entry.name in collisions)
+            cells.append(f"{letter}: {shown}")
         self.write("\n")
         for index in range(0, len(cells), columns):
             self.write(" ".join(cells[index : index + columns]).rstrip() + "\n")
@@ -259,13 +331,16 @@ def _widen(pattern: str) -> str:
     return "*" if pattern in {"*.*", ""} else pattern
 
 
-def _eight_three(name: str, *, verbatim: bool = False) -> str:
-    """Present a host name in CP/M's ``NAME     TYP`` column form.
+def _has_drive(spec: str) -> bool:
+    return len(spec) >= 2 and spec[1] == ":" and spec[0].isalpha()
 
-    Names that do not fit 8.3 are shown in full rather than truncated. A
-    truncated listing would name a file that cannot then be typed back, and
-    a directory listing that lies is worse than one that breaks alignment.
-    Reversible short aliases are milestone 0.4; see ROADMAP.md.
+
+def _eight_three(name: str, *, verbatim: bool = False) -> str:
+    """Present an already-aliased name in CP/M's ``NAME     TYP`` columns.
+
+    Callers pass a name that :class:`AliasMap` has already made fit, so the
+    printed name can always be typed back. The verbatim escape remains for
+    case-colliding host names, which no alias can disambiguate.
     """
     if verbatim:
         # Two host names folding to one CP/M name; upper-casing would print

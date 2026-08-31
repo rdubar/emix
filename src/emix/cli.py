@@ -7,6 +7,10 @@ from pathlib import Path
 import sys
 
 from emix import __version__
+from emix import config as emix_config
+from emix.apps import profiles as app_profiles
+from emix.apps.runner import describe_profiles, open_document
+from emix.assist import COLOURS
 from emix.errors import EmixError
 from emix.host import Drive, DriveSet
 from emix.personalities import DRIVE_NAMES, PERSONALITIES, get
@@ -26,9 +30,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "personality",
         nargs="?",
-        default="cpm",
+        default=None,
         choices=sorted(PERSONALITIES),
-        help="personality to start (default: cpm)",
+        help="personality to start (default: cpm, or the configured one)",
     )
     parser.add_argument(
         "--mount",
@@ -56,6 +60,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not read or write a readline history file",
     )
+    parser.add_argument(
+        "--strict",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "authentic output only, with no Emix hints "
+            "(default: on for scripts and pipes, off when interactive)"
+        ),
+    )
+    parser.add_argument(
+        "--hint-colour",
+        "--hint-color",
+        dest="hint_colour",
+        choices=sorted(COLOURS),
+        default=None,
+        metavar="COLOUR",
+        help="colour for Emix hints (default: yellow; also $EMIX_HINT_COLOUR, $NO_COLOR)",
+    )
     parser.add_argument("--version", action="version", version=f"Emix {__version__}")
     return parser
 
@@ -71,24 +93,90 @@ def build_drives(personality: str, mounts: list[Path]) -> DriveSet:
     )
 
 
+def build_open_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="emix open",
+        description="Open a host document in a historical application.",
+    )
+    parser.add_argument("document", type=Path, help="host file to open")
+    parser.add_argument(
+        "--with", "-w", dest="app", required=True, metavar="APP", help="configured application"
+    )
+    parser.add_argument("--yes", "-y", action="store_true", help="commit without confirming")
+    parser.add_argument("--keep", action="store_true", help="keep the session workspace after exit")
+    parser.add_argument(
+        "--stay",
+        action="store_true",
+        help="stay at the guest prompt after the application exits",
+    )
+    return parser
+
+
+def run_open(argv: list[str]) -> int:
+    args = build_open_parser().parse_args(argv)
+    try:
+        profile = app_profiles.get(args.app)
+        return open_document(
+            args.document, profile, assume_yes=args.yes, keep=args.keep, stay=args.stay
+        )
+    except EmixError as error:
+        print(f"emix: {error}", file=sys.stderr)
+        return 1
+
+
+def run_apps(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="emix apps", description="List configured applications.")
+    parser.parse_args(argv)
+    try:
+        return describe_profiles(app_profiles.load())
+    except EmixError as error:
+        print(f"emix: {error}", file=sys.stderr)
+        return 1
+
+
+#: Subcommands checked before the personality parser, so ``emix cpm`` keeps
+#: working exactly as it did.
+SUBCOMMANDS = {"open": run_open, "apps": run_apps}
+
+
 def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments and arguments[0] in SUBCOMMANDS:
+        return SUBCOMMANDS[arguments[0]](arguments[1:])
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(arguments)
+
+    try:
+        settings = emix_config.load()
+    except EmixError as error:
+        parser.error(f"configuration: {error}")
+
+    # Command line, then configuration, then the built-in default. A flag
+    # always wins, so a script's behaviour is readable from the script.
+    personality = args.personality or settings.personality or "cpm"
+    if personality not in PERSONALITIES:
+        parser.error(f"unknown personality {personality!r}")
 
     mounts = list(args.mount or [])
     if args.root is not None:
         mounts.insert(0, args.root)
     if not mounts:
-        mounts = [Path.cwd()]
+        mounts = settings.mounts_for(personality) or [Path.cwd()]
 
     try:
-        drives = build_drives(args.personality, mounts)
+        drives = build_drives(personality, mounts)
     except EmixError as error:
         parser.error(str(error))
 
-    personality = get(args.personality)
-    history = None if (args.no_history or args.command) else default_history_path(args.personality)
-    shell = personality(drives, history=history)
+    factory = get(personality)
+    history = None if (args.no_history or args.command) else default_history_path(personality)
+    shell = factory(
+        drives,
+        history=history,
+        strict=args.strict if args.strict is not None else settings.strict,
+        hint_colour=args.hint_colour or settings.hint_colour,
+    )
 
     if args.command:
         for line in args.command:

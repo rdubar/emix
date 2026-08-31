@@ -5,12 +5,23 @@
 [![Python](https://img.shields.io/pypi/pyversions/emix-shell)](https://pypi.org/project/emix-shell/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Emix lets a modern Unix machine pretend to be an older computer.
+Emix lets a modern Unix machine present itself as an older computer — and,
+when you ask it to, run that computer's real software on your real files.
 
-It is not a CPU emulator and it does not run historical binaries. It presents
-the *commands, syntax, output formats and error messages* of historical
-systems while operating on ordinary host files with ordinary host programs
-underneath. Your files stay real files.
+Those are two different things, and Emix keeps them clearly apart:
+
+- **A personality is not an emulator.** `emix cpm` reproduces CP/M's commands,
+  syntax, output formats and error messages in Python, over ordinary host
+  files. No 8080 is involved.
+- **An application is.** `A>ED LETTER.TXT` loads a real `ED.COM` and executes
+  real Z80 instructions through [RunCPM](https://github.com/MockbaTheBorg/RunCPM),
+  on a document staged from your own folder. Emix owns the drives, the
+  filenames and what comes back out; it does not own the CPU.
+
+Emix ships no operating systems and no applications — you supply software you
+already have, and Emix supplies the knowledge of how to drive it.
+
+The full guide is [docs/MANUAL.md](docs/MANUAL.md).
 
 Three personalities ship today:
 
@@ -42,7 +53,7 @@ The distribution is **`emix-shell`** but the command is **`emix`**, which is
 why `uvx` needs `--from`. PyPI rejects the bare name `emix` as too similar to
 the existing `emux`, `emx` and `emi` projects.
 
-Emix has no runtime dependencies beyond Python 3.10 or newer. If `uv` warns
+Emix has no runtime dependencies beyond Python 3.11 or newer. If `uv` warns
 that `~/.local/bin` is not on your `PATH`, run `uv tool update-shell` and open
 a new terminal.
 
@@ -68,6 +79,9 @@ The current directory becomes the first drive. Mount more with `--mount`,
 which is repeatable; drives are named in each personality's own style, so the
 first mount is `A:` under CP/M, `DKA0:` under VMS and filemode `A` under CMS.
 
+Settings can persist in `~/.config/emix/emix.toml` — the personality to start,
+drives to mount, hint colour, whether to be strict. Command line always wins.
+
 ```sh
 emix cpm                                  # . becomes A:
 emix cpm --mount ~/Documents --mount ~/src  # A: and B:
@@ -76,50 +90,42 @@ emix cms --mount ~/Documents              # filemode A
 emix cpm -c "DIR *.TXT"                   # run one command and exit
 ```
 
-A CP/M session:
+### Real CP/M applications
+
+With an emulator installed separately, Emix can open a host document in real
+CP/M software. Set it up once (see [the manual](docs/MANUAL.md)), then:
 
 ```text
-EMIX 0.2.1
-CP/M 2.2 PERSONALITY
-A: /Users/rdubar/dev/emix
-TYPE HELP FOR AVAILABLE COMMANDS.
+A>APPS
+DDT        DDT.COM        DDT
+ED         ED.COM         ED-CPM
+MBASIC     MBASIC.COM     MBASIC
+TE         TE.COM         TE-CPM
 
-A>DIR *.MD
-A: README   MD  A: ROADMAP  MD
+A>ED NEW.TXT
 
-A>PIP NOTES.TXT=README.MD
-A>STAT
-A: R/W, SPACE: 96,508,384K
-A>python3 hello.py
-Hello from Unix
-A>EXIT
-RETURNING TO UNIX.
+NEW FILE
+     : *I
+    1:  Dear Gary,
+    2:  The BDOS is a triumph.
+    3:
+     : *E
+
+DOCUMENT SESSION COMPLETE
+
+  CREATED   NEW.TXT
+  IGNORED   NEW.$$$  (the application's own backup)
+
+Save these changes to the host? [Y/n]
 ```
 
-The same drive under DCL:
+That is Digital Research's `ED.COM` from 1982, executing real Z80
+instructions, editing a file in your own folder. `MBASIC` gets you Microsoft
+BASIC-85 5.29; `DDT` gets you the debugger.
 
-```text
-$ DIRECTORY/SIZE
-
-Directory DKA0:[000000]
-
-README.MD;1                    15
-ROADMAP.MD;1                   20
-
-Total of 2 files, 35 blocks.
-
-$ DELETE README.MD
-%DELETE-W-NOVER, explicit version number required
-```
-
-and under CMS, where a file is three words and the system answers `Ready;`:
-
-```text
-LISTFILE
-README   MD       A1
-ROADMAP  MD       A1
-Ready; T=0.01/0.01 21:42:19
-```
+Only the document you named is staged, so the program cannot see the rest of
+the folder. The editor's own scratch file is named but not committed. The
+write is atomic, and is refused if the host file changed while the guest ran.
 
 ## What is authentic and what is not
 
@@ -137,13 +143,56 @@ failure. Error messages follow each system's house format — `NO FILE`,
 **Deliberately not authentic.** `ERA` confirms every erase, where CP/M only
 confirmed for `ERA *.*`, because these are your real files. Names that do not
 fit 8.3 are shown in full rather than truncated, because a listing that names
-a file you cannot then type is worse than a misaligned column. `HELP`, `CLS`,
-`VER`, `UNIX` and `DRIVES` are Emix conveniences and are labelled as such in
+a file you cannot then type is worse than a misaligned column, so a long name
+is shown as a reversible alias — `pyproject.toml` lists as `PYPROJ_1 TOM`, and
+`TYPE PYPROJ_1.TOM` reads it back without ever renaming the host file. `ABOUT` and
+`CREDIT` are shared Emix commands in every personality, as are `APPS`,
+`EXPLAIN` and `STRICT`. `HELP`, `CLS`, `VER`,
+`UNIX` and `DRIVES` are further Emix conveniences and are labelled as such in
 `HELP`. File versions display as `;1` but only one copy is stored.
 
 **Not yet built.** CP/M user areas, reversible 8.3 aliases, VMS directory
 syntax and real file versions, CMS `EXEC` and `XEDIT`. See
-[ROADMAP.md](ROADMAP.md).
+[docs/ROADMAP.md](docs/ROADMAP.md). More speculative jokes, atmosphere and optional AI
+experiments live in [docs/IDEAS.md](docs/IDEAS.md).
+
+## Assistance
+
+Emix helps you find the period command without pretending to be a system that
+accepted yours:
+
+```text
+$ ls
+%DCL-W-IVVERB, unrecognized command verb - check validity and spelling
+Emix: OpenVMS has no ls. To list the files, use DIRECTORY.
+
+$ DELETE FOO.TXT
+%DELETE-W-NOVER, explicit version number required
+$ EXPLAIN
+Emix: DELETE needs an explicit version, as in FILE.TXT;1. VMS kept every
+Emix: version of a file, so a delete without one was too easy to get wrong.
+```
+
+Three rules make this safe to leave on: the authentic response prints first
+and unaltered, every added line is marked `Emix:`, and **nothing is ever run
+on a guess** — a hint names the command, you type it. That is the difference
+between assistance that teaches the old system and assistance that replaces
+it.
+
+Output from commands the original system never had is printed in the hint
+colour too, so nothing non-period is mistaken for period output. Each
+personality decides: CP/M's `HELP` is painted because CP/M had none, while
+VMS's stays plain because VMS had one.
+
+Emix asks the terminal what colour it is — `COLORFGBG` first, then an OSC 11
+query — and answers in **green phosphor on a dark screen, amber on a light
+one**. A terminal that will not say gets amber, which is legible on either.
+`--hint-colour cyan` (or `$EMIX_HINT_COLOUR`) picks another; `$NO_COLOR` and any non-terminal output disable it, because escape
+codes in a pipe are corruption rather than decoration.
+
+`STRICT ON`, or `--strict`, removes all of it. Scripts and pipes are strict by
+default, because a script must not depend on a guess. Tab completion stays on
+either way: it changes what you type, never what runs.
 
 ## Safety
 
@@ -172,7 +221,7 @@ project, and the reason for everything above.
 
 ```sh
 uv sync           # create the environment
-uv run pytest     # 78 tests
+uv run pytest     # 222 tests
 uv run ruff check . && uv run ruff format --check .
 uv run mypy       # strict
 ```
@@ -184,8 +233,11 @@ src/emix/
   errors.py         symbolic error codes, worded by each personality
   host.py           drives: containment, case folding, ambiguity
   shell.py          the REPL, verb table, abbreviation, host fallthrough
-  cli.py            argument parsing and drive mounting
+  cli.py            argument parsing, drive mounting, subcommands
+  assist.py         hints, translations and explanations; never executes
+  config.py         settings that persist between sessions
   personalities/    cpm.py, vms.py, cms.py — vocabulary and house style
+  apps/             document sessions in real historical applications
 ```
 
 Adding a personality means one module and one line in
@@ -200,7 +252,7 @@ filesystem there is the interesting case, and it caught a bug that macOS
 structurally could not.
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md). The
-[roadmap](ROADMAP.md) covers where it goes next, including whether Emix
+[roadmap](docs/ROADMAP.md) covers where it goes next, including whether Emix
 should eventually execute genuine CP/M `.COM` binaries in a sandbox — and why
 that turns out to be less frightening than it sounds.
 

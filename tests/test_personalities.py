@@ -40,11 +40,38 @@ def test_cpm_dir_star_dot_star_means_every_file(drives, drive_root):
     assert "MAKEFILE" in run(CpmShell, drives, "DIR *.*")
 
 
-def test_cpm_names_too_long_for_8_3_are_shown_in_full(drives, drive_root):
+def test_cpm_shows_a_long_name_as_a_reversible_8_3_alias(drives, drive_root):
     (drive_root / "pyproject.toml").write_text("x")
 
-    # Truncating would name a file the user cannot then type back.
-    assert "PYPROJECT.TOML" in run(CpmShell, drives, "DIR")
+    # Not PYPROJECT.TOML (does not fit) and not PYPROJEC.TOM (cannot be typed
+    # back). The alias is short, and the next test types it back.
+    assert "PYPROJ_1 TOM" in run(CpmShell, drives, "DIR")
+
+
+def test_cpm_accepts_an_alias_back_without_renaming_the_host_file(drives, drive_root):
+    (drive_root / "pyproject.toml").write_text("[project]\n")
+
+    rendered = run(CpmShell, drives, "TYPE PYPROJ_1.TOM")
+
+    assert "[project]" in rendered
+    assert (drive_root / "pyproject.toml").exists()
+
+
+def test_cpm_still_prefers_a_real_host_name_over_an_alias(drives, drive_root):
+    (drive_root / "NOTES.TXT").write_text("the real one\n")
+    (drive_root / "notes-from-yesterday.txt").write_text("the long one\n")
+
+    assert "the real one" in run(CpmShell, drives, "TYPE NOTES.TXT")
+
+
+def test_cpm_aliases_are_stable_regardless_of_listing_order(drives, drive_root):
+    for name in ["zeta-long-name.txt", "alpha-long-name.txt"]:
+        (drive_root / name).write_text("x")
+
+    first = run(CpmShell, drives, "DIR")
+    second = run(CpmShell, drives, "DIR")
+
+    assert first == second
 
 
 def test_cpm_pip_copies_in_destination_first_order(drives, drive_root):
@@ -212,6 +239,18 @@ def test_every_personality_starts_and_reports_a_banner(key, drives):
     assert shell.banner().strip()
     assert shell.prompt() is not None
     assert key in DRIVE_NAMES
+
+
+@pytest.mark.parametrize("key", sorted(PERSONALITIES))
+def test_every_personality_exposes_the_shared_project_commands(key, drives):
+    rendered = run(PERSONALITIES[key], drives, "ABOUT", "CREDIT")
+
+    # Each personality may fold this into its own casing, so compare content.
+    shouted = rendered.upper()
+    assert "ACTIVE PERSONALITY:" in shouted
+    assert f"({key.upper()})" in shouted
+    assert "ROGER DUBAR" in shouted
+    assert "MIT LICENSE" in shouted
 
 
 @pytest.mark.parametrize("key", sorted(PERSONALITIES))
