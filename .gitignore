@@ -12,3 +12,6 @@ dist/
 
 # Local, uncommitted agent notes
 AGENTS.local.md
+
+# Local development notes, not part of the package
+dev/

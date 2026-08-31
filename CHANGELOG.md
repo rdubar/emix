@@ -66,6 +66,16 @@
 - CP/M lists a long host name as a reversible alias (`PYPROJ_1 TOM`) and
   accepts it back, without ever renaming the host file.
 
+- `emix --update` reports how this copy was installed, names the newest
+  published version, and offers the matching upgrade command — `uv tool
+  upgrade`, `pipx upgrade`, `pip install --upgrade`, or `git pull` for a
+  checkout. It shows the command and asks before running it. The version
+  check is the only network request Emix makes, and only on request.
+
+- The source distribution shipped local working notes, `.coverage` and
+  `AGENTS.local.md`. It now excludes them explicitly; hatchling's sdist does
+  not honour `.gitignore`.
+
 ### Fixed
 
 - A host file edited *during* staging could be silently overwritten on

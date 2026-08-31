@@ -28,6 +28,7 @@ src/emix/
   assist.py         hints, translations, explanations, completion
   config.py         persistent settings; command line always wins
   terminal.py       background detection, so green phosphor is only used on dark
+  update.py         `--update`: detect the install method, offer the command
   cli.py            argument parsing; `open` and `apps` subcommands
   personalities/    cpm.py, vms.py, cms.py — vocabulary and house style
   apps/             document sessions over external emulators
@@ -39,7 +40,9 @@ src/emix/
     runner.py       one session, end to end
 tests/golden/       whole-session transcripts; rerecord with
                     `uv run pytest --record-golden`
-docs/               ROADMAP.md, APPLICATIONS.md, IDEAS.md
+docs/               ROADMAP.md, APPLICATIONS.md, MANUAL.md, IDEAS.md
+dev/                gitignored working notes; `dev/reviews/` holds dated
+                    review transcripts. Durable decisions belong in docs/.
 ```
 
 ## Invariants — do not regress these
@@ -60,6 +63,8 @@ docs/               ROADMAP.md, APPLICATIONS.md, IDEAS.md
    A failed commit never claims an undo it did not perform, and its workspace
    is always kept.
 7. **Tests never require a third-party binary.** Use `FakeBackend`.
+   The one network call in the project is the version check behind
+   `--update`, and it is only made when the user asks for it.
 8. **Assistance never alters authentic output.** The period response prints
    first and verbatim; hints go below it under the `Emix:` marker. A test
    asserts assisted output starts with exactly the strict output.

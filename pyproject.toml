@@ -50,6 +50,18 @@ path = "src/emix/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/emix"]
 
+[tool.hatch.build.targets.sdist]
+# Local working notes must never reach the package index. The sdist otherwise
+# takes everything in the directory, gitignore or not.
+exclude = [
+  "/dev",
+  "/AGENTS.local.md",
+  "/.coverage",
+  "/htmlcov",
+  "/dist",
+  "/.venv",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

@@ -8,6 +8,7 @@ import sys
 
 from emix import __version__
 from emix import config as emix_config
+from emix import update as emix_update
 from emix.apps import profiles as app_profiles
 from emix.apps.runner import describe_profiles, open_document
 from emix.assist import COLOURS
@@ -78,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="COLOUR",
         help="colour for Emix hints (default: yellow; also $EMIX_HINT_COLOUR, $NO_COLOR)",
     )
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="show how this copy was installed and offer to update it",
+    )
     parser.add_argument("--version", action="version", version=f"Emix {__version__}")
     return parser
 
@@ -146,6 +152,9 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(arguments)
+
+    if args.update:
+        return emix_update.update()
 
     try:
         settings = emix_config.load()

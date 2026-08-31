@@ -53,6 +53,13 @@ The distribution is **`emix-shell`** but the command is **`emix`**, which is
 why `uvx` needs `--from`. PyPI rejects the bare name `emix` as too similar to
 the existing `emux`, `emx` and `emi` projects.
 
+To update later, ask Emix — it knows how it was installed and offers the
+matching command rather than guessing:
+
+```sh
+emix --update
+```
+
 Emix has no runtime dependencies beyond Python 3.11 or newer. If `uv` warns
 that `~/.local/bin` is not on your `PATH`, run `uv tool update-shell` and open
 a new terminal.
