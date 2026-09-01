@@ -161,9 +161,14 @@ matches — `uv tool upgrade`, `pipx upgrade`, `pip install --upgrade`, or
 `git pull` for a source checkout. It shows the command, asks, and only then
 runs it; nothing is executed on a guess.
 
-It also names the newest published version. That check is the only network
-request Emix ever makes, and it happens only when you ask for an update. If
-the package index cannot be reached, Emix says so rather than guessing.
+It also names the newest published version. If the package index cannot be
+reached, Emix says so rather than guessing.
+
+**Emix never reaches the network unless you ask it to**, and there are exactly
+two ways to ask. This update check, when you run `emix --update`; and WOPR's
+conversation, when you turn it on with `CONVERSE ON` and have installed the
+optional package for it. Nothing happens at startup, nothing is reported
+anywhere, and there is no telemetry of any kind.
 
 ### Run from a source checkout
 
