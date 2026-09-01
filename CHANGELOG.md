@@ -28,6 +28,12 @@
 - Issue templates, including one for historical inaccuracies, which are the
   most valuable reports Emix can get.
 
+- A configuration file that fails to parse because a Windows path was written
+  in double quotes now says so. TOML reads `\U` as the start of an escape, so
+  `drives = ["C:\Users\me"]` fails with "Invalid hex value", which reads like
+  a bug in Emix rather than a quoting rule. The advice only appears when a
+  backslash inside quotes is the likely cause.
+
 ### Changed (internal)
 
 - `readline` is reached through `importlib` and treated as the optional module

@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from conftest import failing_program, needs_written_programs, write_program
+from conftest import failing_program, needs_written_programs, toml_path, write_program
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -107,7 +107,7 @@ def test_a_failing_application_exits_non_zero(drive, tmp_path):
         "[app.failing]\n"
         'backend = "runcpm"\n'
         'program = "X.COM"\n'
-        f'application = "{drive}"\n'
+        f"application = {toml_path(drive)}\n"
         f'executable = "{failing_program(tmp_path).as_posix()}"\n'
         'command = "FAIL"\n'
     )

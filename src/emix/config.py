@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import re
 import tomllib
 
 from emix.assist import COLOURS
@@ -73,11 +74,15 @@ def load(path: Path | None = None) -> Config:
     if not source.is_file():
         return Config()
     try:
-        payload = tomllib.loads(source.read_text(encoding="utf-8"))
+        payload_text = source.read_text(encoding="utf-8")
+    except OSError as error:
+        raise EmixError(Code.IO_ERROR, str(source), str(error)) from error
+    try:
+        payload = tomllib.loads(payload_text)
     except OSError as error:
         raise EmixError(Code.IO_ERROR, str(source), str(error)) from error
     except tomllib.TOMLDecodeError as error:
-        raise EmixError(Code.SYNTAX, str(source), str(error)) from error
+        raise EmixError(Code.SYNTAX, str(source), toml_detail(payload_text, error)) from error
 
     emix = payload.get("emix", {})
     if not isinstance(emix, dict):
@@ -111,6 +116,25 @@ def load(path: Path | None = None) -> Config:
         hint_colour=colour,
         screen=screen,
     )
+
+
+#: TOML reads a backslash inside a double-quoted string as an escape, so a
+#: Windows path pasted straight in fails on `\U` or `\x` with a message about
+#: hex values that tells the reader nothing about what to do.
+_BACKSLASH_IN_QUOTES = re.compile(r'"[^"\n]*\\[^"\n]*"')
+
+
+def toml_detail(text: str, error: Exception) -> str:
+    """The parser's words, plus what to do about them if we can tell."""
+    detail = str(error)
+    if _BACKSLASH_IN_QUOTES.search(text):
+        detail += (
+            ". A Windows path in double quotes needs its backslashes doubled, "
+            "because TOML reads a single one as an escape. Single quotes take "
+            "the path exactly as written: drives = ['C:\\Users\\me\\Documents'] "
+            "is the easiest spelling, and forward slashes work too."
+        )
+    return detail
 
 
 def _colour(emix: dict[str, object], key: str, source: Path) -> str:

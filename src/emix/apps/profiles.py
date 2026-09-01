@@ -187,11 +187,15 @@ def load(path: Path | None = None) -> dict[str, Profile]:
     if not source.is_file():
         return {}
     try:
-        payload = tomllib.loads(source.read_text(encoding="utf-8"))
+        text = source.read_text(encoding="utf-8")
     except OSError as error:
         raise EmixError(Code.IO_ERROR, str(source), str(error)) from error
+    try:
+        payload = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
-        raise EmixError(Code.SYNTAX, str(source), str(error)) from error
+        from emix.config import toml_detail
+
+        raise EmixError(Code.SYNTAX, str(source), toml_detail(text, error)) from error
 
     apps = payload.get("app", {})
     if not isinstance(apps, dict):

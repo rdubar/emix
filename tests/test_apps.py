@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import ANY_EXECUTABLE, needs_symlinks
+from conftest import ANY_EXECUTABLE, needs_symlinks, toml_path
 from emix.apps.backends import (
     Disposition,
     FakeBackend,
@@ -598,7 +598,7 @@ def test_notes_are_read_from_configuration(tmp_path):
     config = tmp_path / "apps.toml"
     config.write_text(
         '[app.x]\nbackend = "fake"\nprogram = "TE.COM"\n'
-        f'application = "{tmp_path}"\nnotes = "Use ^H to delete left."\n'
+        f"application = {toml_path(tmp_path)}\n" + 'notes = "Use ^H to delete left."\n'
     )
 
     loaded = module.load(config)
@@ -1114,7 +1114,7 @@ def test_an_optional_path_must_be_a_string(tmp_path):
 
     config = tmp_path / "apps.toml"
     config.write_text(
-        f'[app.x]\nbackend="fake"\nprogram="T.COM"\napplication="{tmp_path}"\nexecutable=42\n'
+        f'[app.x]\nbackend="fake"\nprogram="T.COM"\napplication={toml_path(tmp_path)}\nexecutable=42\n'
     )
 
     with pytest.raises(EmixError) as caught:
@@ -1128,7 +1128,7 @@ def test_an_unknown_personality_is_refused(tmp_path):
 
     config = tmp_path / "apps.toml"
     config.write_text(
-        f'[app.x]\nbackend="fake"\nprogram="T.COM"\napplication="{tmp_path}"\nsystem="cpn"\n'
+        f'[app.x]\nbackend="fake"\nprogram="T.COM"\napplication={toml_path(tmp_path)}\nsystem="cpn"\n'
     )
 
     with pytest.raises(EmixError) as caught:

@@ -6,6 +6,7 @@ import io
 
 import pytest
 
+from conftest import needs_posix_terminal
 from emix.assist import default_screen
 from emix.terminal import Reply, _from_colorfgbg, _luminance, ask_background, background_is_dark
 
@@ -243,6 +244,7 @@ def test_the_linux_console_is_known_dark_without_being_asked(unix, monkeypatch):
     assert asked == []
 
 
+@needs_posix_terminal
 def test_the_probe_does_not_flush_what_the_user_already_typed(unix, monkeypatch):
     """The regression: tty.setraw defaults to TCSAFLUSH, which discards a paste.
 
