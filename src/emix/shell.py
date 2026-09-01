@@ -460,7 +460,7 @@ class Shell:
         self.write(
             self.house_case(
                 f"Emix {__version__}\n"
-                "Historical computer personalities over a modern Unix host.\n"
+                "Historical computer personalities over your own files.\n"
                 f"Active personality: {self.title} ({self.key})\n"
                 "Emix recreates the interaction, not the original hardware or binaries.\n"
                 "https://github.com/rdubar/emix\n"

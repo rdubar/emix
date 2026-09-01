@@ -5,8 +5,8 @@
 [![Python](https://img.shields.io/pypi/pyversions/emix-shell)](https://pypi.org/project/emix-shell/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Emix lets a modern Unix machine present itself as an older computer — and,
-when you ask it to, run that computer's real software on your real files.
+Emix lets a modern computer present itself as an older one — and, when you ask
+it to, run that older computer's real software on your real files.
 
 Those are two different things, and Emix keeps them clearly apart:
 
@@ -64,11 +64,14 @@ Emix has no runtime dependencies beyond Python 3.11 or newer. If `uv` warns
 that `~/.local/bin` is not on your `PATH`, run `uv tool update-shell` and open
 a new terminal.
 
-**macOS, Linux and Windows**, all three covered by CI, plus the Raspberry Pi's
-own console. Two things are Unix-only: tab completion and command history need
-`readline`, which Windows does not ship (install `pyreadline3` to get them
-back), and the RunCPM application bridge is not yet documented for Windows.
-WSL gives you the Linux experience unchanged if either matters.
+**macOS, Linux and Windows**, all three covered by CI on Python 3.11 to 3.14,
+and the Raspberry Pi's own console as well as SSH into it.
+
+Two things are Unix-only. Tab completion and command history need `readline`,
+which Windows does not ship — `uv tool install "emix-shell[windows]"` adds
+`pyreadline3` and restores both. The RunCPM application bridge builds on
+Windows but is not yet documented for it. WSL gives you the Linux experience
+unchanged if either matters.
 
 ### From source
 
@@ -92,8 +95,9 @@ The current directory becomes the first drive. Mount more with `--mount`,
 which is repeatable; drives are named in each personality's own style, so the
 first mount is `A:` under CP/M, `DKA0:` under VMS and filemode `A` under CMS.
 
-Settings can persist in `~/.config/emix/emix.toml` — the personality to start,
-drives to mount, hint colour, whether to be strict. Command line always wins.
+Settings can persist in `~/.config/emix/emix.toml` (`%APPDATA%\emix\emix.toml`
+on Windows) — the personality to start, drives to mount, screen and hint
+colours, whether to be strict. Command line always wins.
 
 ```sh
 emix cpm                                  # . becomes A:
@@ -273,11 +277,17 @@ class handles parsing, dispatch, confirmation, history and errors.
 
 ## Status
 
-Emix is an early experiment. Version 0.3 is on PyPI and is useful for real
-file browsing today — on macOS, on Windows, and on a Raspberry Pi 5, where the
-case-sensitive filesystem is the interesting case and caught a bug that macOS
-structurally could not. Running real CP/M applications over your own documents
-works, and needs an emulator you build yourself.
+Emix is an early experiment, and says so on PyPI: the classifier is Alpha.
+Version 0.4 is useful for real file browsing today — on macOS, on Windows, and
+on a Raspberry Pi 5, where the case-sensitive filesystem is the interesting
+case and caught a bug that macOS structurally could not. Running real CP/M
+applications over your own documents works, and needs an emulator you build
+yourself.
+
+It is one person's project. Bug reports are welcome, and reports of
+**historical inaccuracy** are the most welcome of all — if Emix says something
+the real machine never said, that is a bug, and there is an issue template for
+it.
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md). The
 [roadmap](docs/ROADMAP.md) covers where it goes next, including whether Emix

@@ -21,7 +21,7 @@ from emix.shell import default_history_path
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="emix",
-        description="Use a modern Unix machine through a historical computer personality.",
+        description="Use your own computer through a historical computer personality.",
         epilog=(
             "Drives are mounted in order: the first --mount becomes the first drive "
             "name for the personality (A: for CP/M, DKA0: for VMS), and so on. "
