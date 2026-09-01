@@ -78,6 +78,61 @@ Other ways to add atmosphere:
 - Achievement messages kept outside normal output: first cross-drive copy,
   first valid VMS abbreviation, first CMS three-token fileid.
 
+## WOPR: the fourth personality that never existed
+
+`emix wopr` — the WarGames terminal. Type what David Lightman types and get
+what he gets.
+
+The important design decision is that this is **a personality, not an easter
+egg**. An egg hidden inside `cpm` would put invented behaviour behind a period
+prompt, which is the exact thing `is_emix_verb` and the painting rule exist to
+prevent. A separate personality keeps the promise: every prompt is honest
+about what it is.
+
+And WOPR is the one personality that cannot be inauthentic, because it is
+fictional. Every other personality is measured against a real system and can
+be caught getting it wrong. This one is measured against a film, which makes
+it the cheapest personality the engine will ever host — no manuals to check,
+no error formats to reproduce, no risk of teaching something false.
+
+The shape:
+
+```
+LOGON: JOSHUA
+
+GREETINGS PROFESSOR FALKEN.
+
+SHALL WE PLAY A GAME?
+```
+
+`HELP GAMES` and then `LIST GAMES` produce the list, from FALKEN'S MAZE down
+through the card games to GLOBAL THERMONUCLEAR WAR. It has no prompt of its
+own, because WOPR simply talks — which the engine already supports, since CMS
+has no prompt either.
+
+Three things to settle before building it:
+
+- **Most of the games should actually work.** This is what turns a gag into a
+  feature. CHESS, CHECKERS, POKER, BLACK JACK and HEARTS all exist as public
+  domain BASIC programs, so `PLAY CHESS` can dispatch through the application
+  machinery in [APPLICATIONS.md](APPLICATIONS.md) rather than printing an
+  apology. WOPR then becomes the shop window for the catalogue below, and the
+  two ideas pay for each other.
+- **The dialogue is copyrighted.** WarGames is 1983 and still in copyright.
+  Quoting the four lines everyone knows is short-form quotation and is very
+  likely fine; reproducing the whole scene is a different act. The safer
+  version is also the more Emix-ish one — recreate the *interaction* and write
+  the connective tissue, exactly as the personalities recreate CP/M's
+  behaviour rather than shipping CP/M.
+- **GLOBAL THERMONUCLEAR WAR prints its line and stops.** "A STRANGE GAME.
+  THE ONLY WINNING MOVE IS NOT TO PLAY." A straight-faced refusal is both the
+  joke and the correct implementation.
+
+ELIZA belongs in the same room. WOPR and ELIZA are the same joke seventeen
+years apart — a person talking earnestly to a machine that is only matching
+patterns — and most ELIZA ports are public domain. A `TALK` verb under WOPR,
+or ELIZA as a catalogue entry, would make the pairing visible.
+
 ## AI integrations that fit Emix
 
 The best AI features translate between modern intent and historical syntax.

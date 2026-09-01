@@ -41,24 +41,57 @@ COLOURS: dict[str, str] = {
     "red": "31",
     "grey": "90",
     "gray": "90",
+    # The bright half of the sixteen. A colour scheme often renders the dim
+    # green as a muddy yellow-green, which is both wrong for phosphor and too
+    # close to amber to tell apart; the bright pair separates cleanly.
+    "bright-yellow": "93",
+    "bright-cyan": "96",
+    "bright-green": "92",
+    "bright-magenta": "95",
+    "bright-blue": "94",
+    "bright-red": "91",
+    "bright-white": "97",
+    "white": "37",
     "none": "",
 }
 
-#: On a dark terminal, green phosphor. Anywhere else — or when the terminal
-#: will not say — amber, which stays legible on either ground.
-PHOSPHOR = "green"
-DEFAULT_COLOUR = "yellow"
+#: The main text: green phosphor on a dark terminal, and nothing at all
+#: anywhere else, because green on a light ground is merely hard to read.
+#: The bright green, not the dim one — many colour schemes render ANSI 32 as a
+#: muddy yellow-green that is neither convincing as phosphor nor far enough
+#: from amber to read as a different voice.
+PHOSPHOR = "bright-green"
+
+#: Emix's own voice, which must never be the phosphor — if the hints match the
+#: screen they stop reading as hints. Amber, and bright enough to separate
+#: from the phosphor at a glance rather than on inspection.
+DEFAULT_COLOUR = "bright-yellow"
 
 
-def default_colour(dark: bool | None) -> str:
-    """The hint colour to use when nobody has chosen one."""
-    return PHOSPHOR if dark else DEFAULT_COLOUR
+def default_screen(dark: bool | None) -> str:
+    """The main text colour to use when nobody has chosen one."""
+    return PHOSPHOR if dark else "none"
+
+
+def default_hint(screen: str) -> str:
+    """The hint colour to use against ``screen`` when nobody has chosen one.
+
+    Amber, unless the screen is itself amber — in which case there is no hue
+    left to separate them, and white is the only honest answer.
+    """
+    return "bright-white" if screen in {"yellow", "bright-yellow"} else DEFAULT_COLOUR
+
+
+def sgr(colour: str) -> str:
+    """The escape that turns ``colour`` on, or ``""`` for no colour at all."""
+    code = COLOURS.get(colour, "")
+    return f"\033[{code}m" if code else ""
 
 
 def colourise(text: str, colour: str) -> str:
     """Wrap ``text`` in an ANSI colour, or return it untouched."""
-    code = COLOURS.get(colour, "")
-    return f"\033[{code}m{text}\033[0m" if code else text
+    start = sgr(colour)
+    return f"{start}{text}\033[0m" if start else text
 
 
 #: How close a mistyped verb must be before Emix mentions the real one.
@@ -180,6 +213,13 @@ GENERAL: dict[str, str] = {
         "sealed: a personality can only reach inside its own root."
     ),
     "NO_DRIVE": "No such drive is mounted. Mount more with --mount.",
+    "NEEDS_SHELL": (
+        "That program is a Windows batch file. Windows runs those through its "
+        "command processor, which would read your arguments as shell syntax — "
+        "so a file named 'a&b' could start a second command. Emix never uses a "
+        "shell, on any host, so it declines rather than make that promise "
+        "false here. Call the .exe directly, or run Emix under WSL."
+    ),
     "IO_ERROR": (
         "The host refused the operation. The detail after the dash is the host's own words."
     ),

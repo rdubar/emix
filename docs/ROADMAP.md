@@ -19,6 +19,8 @@ emulation — until, deliberately and in one clearly bounded place, it does.
 4. **Personalities share an engine.** Vocabulary and house style are the only
    things a personality should have to write.
 5. **Mac and Pi are first-class.** Small install, no runtime dependencies.
+   Windows joined them in 0.4 and is held to the same bar, with one stated
+   exception recorded below.
 
 Principle 2 has a corollary learned in 0.2: **authenticity yields when it
 hides useful host data.** A CP/M directory listing that truncates
@@ -32,6 +34,9 @@ compromise here.
 drive A:, the core file commands, safe host execution.
 
 **0.2 — the engine, and three personalities.** Done.
+
+**0.3 — real applications, and assistance that teaches.** Done. See the
+changelog; 0.4 adds Windows and moves the phosphor to the main text.
 
 - [x] Shared drive layer (`host.py`): containment enforced *after* symlink
       resolution, case-insensitive lookup, loud failure on case ambiguity
@@ -67,7 +72,11 @@ Completion is exempt: it changes what you type, never what runs, so it stays on
 even in strict mode — and completing `DIR` to `DIRECTORY` is itself a way of
 learning the vocabulary.
 
-## 0.3 — depth in the personalities we have
+## Depth in the personalities we have
+
+> The numbered milestones below are plans, not a schedule. Windows took 0.4
+> while several of these were still open, which is normal and worth saying
+> once rather than renumbering headings after every release.
 
 - [ ] CP/M user areas (`USER 0`–`15`) as a real, optional view
 - [x] Reversible 8.3 aliases: `DIR` shows `PYPROJ_1.TOM`, `TYPE` accepts it
@@ -80,7 +89,7 @@ learning the vocabulary.
       strictness: `~/.config/emix/emix.toml`)
 - [x] Tab completion that offers names in the personality's own casing
 
-## 0.4 — the fourth personality
+## The next personality
 
 Candidates, in order of preference:
 
@@ -91,6 +100,98 @@ Candidates, in order of preference:
    the file model is nearly CP/M's.
 3. **Unix v7.** The joke being that the retro personality is a *smaller*
    Unix. `ed`, no job control, terse errors.
+
+## Windows, and the one dependency it costs
+
+Windows is supported and covered by CI. Four things needed saying, and only
+one of them was a real decision:
+
+- **The console must be asked.** A Windows console starts in a mode where
+  `ESC[92m` is five characters to print rather than an instruction.
+  `SetConsoleMode` turns that off, via `ctypes` and no dependency. If the
+  console refuses, Emix falls back to plain text rather than printing escape
+  sequences at somebody.
+- **The screen colour stays off.** Windows can neither answer OSC 11 nor
+  describe a Windows Terminal profile's RGB background through the legacy
+  attribute word, so the background is unknown and unknown means plain — the
+  same rule as a terminal that will not say. Windows users opt in by name.
+- **Settings go where Windows keeps settings**, `%APPDATA%\emix\`, with
+  history under `%LOCALAPPDATA%`. A setting the user cannot find is a setting
+  that does not work.
+- **`CreateProcess` only appends `.exe`.** Host fallthrough could not reach a
+  program a Windows prompt runs happily, so names now resolve through
+  `shutil.which`, which honours `PATHEXT`. **Batch files stay unreachable, on
+  purpose.** Windows runs a `.bat` through `cmd.exe` even when Python is told
+  not to use a shell, and re-parses the arguments by shell rules Python does
+  not escape — a file named `a&b` would become a second command. Principle 3
+  says no host command runs through a shell, so Emix refuses with a message
+  saying why rather than quietly making the principle false on one platform.
+- **`readline` does not exist there**, and that is the real decision.
+
+Tab completion is not a convenience in Emix — the roadmap exempts it from
+strict mode precisely because completing `DIR` to `DIRECTORY` teaches the
+vocabulary. Losing it on Windows loses a teaching feature, not a nicety. So
+`pyreadline3` is an **optional extra**, `emix-shell[windows]`, which keeps
+Principle 5 true where it is claimed rather than quietly false everywhere.
+Writing a line editor to avoid one optional dependency would be a far worse
+trade than taking it.
+
+Still open: RunCPM builds on Windows, but the application bridge is neither
+documented nor tested there. Until it is, the manual says so.
+
+## An application catalogue, not an application bundle
+
+Emix would be far easier to try if `emix apps` could offer software rather
+than assume it. The obvious version of that — bundle the freeware, ship ELIZA
+and an editor and a spreadsheet in the wheel — is the wrong one, and it is
+worth writing down why, because the argument for it is genuinely appealing.
+
+**It contradicts the product.** `profiles.py` opens with "a profile carries
+configuration and compatibility knowledge, never a copyrighted byte", and the
+README's second paragraph says Emix ships no operating systems and no
+applications. Those are not disclaimers, they are the reason the licence is
+unambiguous and the reason nobody has to ask what is in the package.
+
+**"Essentially freeware" hides three different legal situations:**
+
+| Category | Examples | Shippable |
+| --- | --- | --- |
+| Explicit grant | CP/M itself, `TE.COM`, VDE | Yes, with the grant alongside |
+| Public domain by origin | Ahl's *101 BASIC Computer Games*, most ELIZA ports | Yes |
+| Abandonware, no grant | WordStar, SuperCalc, dBASE II, Multiplan | No |
+
+The third row is the one people mean and the one that cannot ship. It is
+mirrored everywhere and nobody is litigating, but PyPI is a far more visible
+distribution point than a hobbyist FTP site, and a package index is where a
+rights holder would actually look. Turbo Pascal is the trap inside the first
+row: Borland's "antique software" release is *personal use only*, which does
+not survive contact with an MIT repository even though everyone calls it free.
+
+### What to build instead
+
+Extend profiles into a catalogue. A catalogue entry is the profile that
+already exists plus provenance — upstream URL, checksum, licence — so:
+
+```sh
+emix apps --list-available
+emix apps --install te
+```
+
+fetches from whoever already distributes the software, verifies it, and writes
+the profile. Emix still ships nothing, so the README's claim stays literally
+true, and the install stops being the hardest step for a new user.
+
+This is also where the value actually is. WordStar is mirrored in a dozen
+archives; the knowledge that TE's `Delete` is bound to `^G` because that is the
+WordStar diamond exists nowhere but the `notes` field of a profile. The bytes
+are a commodity. The catalogue is not.
+
+Open questions: whether fetching over the network belongs in a tool whose
+pitch is having no dependencies (`urllib` is standard library, so the honest
+answer is probably yes); and whether a checksum mismatch should refuse or warn.
+
+If a real bundle is ever wanted, it belongs in a **separate repository** with a
+licence file per artifact, never in `emix-shell`.
 
 ## 0.5 — running real CP/M binaries
 

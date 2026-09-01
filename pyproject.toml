@@ -19,6 +19,7 @@ classifiers = [
   "Intended Audience :: Education",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -27,6 +28,13 @@ classifiers = [
   "Topic :: System :: Emulators",
 ]
 dependencies = []
+
+# Emix has no runtime dependencies, and that is a feature rather than an
+# accident. This one exists because Windows does not ship `readline`, so tab
+# completion and command history — which teach each system's vocabulary — are
+# simply absent there until something provides them.
+[project.optional-dependencies]
+windows = ["pyreadline3>=3.4; sys_platform == 'win32'"]
 
 [project.urls]
 Homepage = "https://github.com/rdubar/emix"

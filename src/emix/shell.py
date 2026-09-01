@@ -24,14 +24,21 @@ from emix import __version__
 from emix.assist import (
     Concept,
     colourise,
-    default_colour,
+    default_hint,
+    default_screen,
     did_you_mean,
     explain,
+    sgr,
     translation_hint,
 )
 from emix.errors import Code, EmixError
-from emix.host import DriveSet, run_host_command
-from emix.terminal import background_is_dark
+from emix.host import DriveSet, on_windows, run_host_command
+from emix.terminal import ask_background, enable_ansi
+
+#: A line the user finished, however their terminal spells the ending. Raw
+#: mode delivers Return as CR, canonical mode as LF, and a paste can carry
+#: either or both.
+_LINE_END = re.compile(r"\r\n|\n|\r")
 
 
 @dataclass(frozen=True)
@@ -175,6 +182,7 @@ class Shell:
         history: Path | None = None,
         strict: bool | None = None,
         hint_colour: str | None = None,
+        screen: str | None = None,
     ) -> None:
         self.drives = drives
         self.stdin = stdin or sys.stdin
@@ -194,15 +202,35 @@ class Shell:
         # terminal whose answer we would then throw away writes an escape
         # sequence for no reason, which a NO_COLOR user has explicitly asked
         # us not to do.
-        if os.environ.get("NO_COLOR") is not None or not _is_a_tty(self.stdout):
+        #: Keystrokes the terminal probe read before the prompt existed.
+        self.typed_ahead = ""
+        if (
+            os.environ.get("NO_COLOR") is not None
+            or not _is_a_tty(self.stdout)
+            # A Windows console that will not turn escape sequences on would
+            # print them instead of obeying them, which is worse than plain.
+            # Asked of this shell's own stream, not the process's.
+            or not enable_ansi(self.stdout)
+        ):
             self.hint_colour = "none"
+            self.screen_colour = "none"
         else:
-            chosen = hint_colour or os.environ.get("EMIX_HINT_COLOUR")
+            chosen = screen or os.environ.get("EMIX_SCREEN")
             if not chosen:
                 # Green only where we know the screen is dark. Asking costs a
                 # few milliseconds once; guessing costs legibility all session.
-                chosen = default_colour(background_is_dark(self.stdin, self.stdout))
-            self.hint_colour = chosen
+                # The ask reads the keyboard, so anything typed into that
+                # window comes back here to be run rather than lost.
+                answer = ask_background(self.stdin, self.stdout)
+                self.typed_ahead = answer.typed_ahead
+                chosen = default_screen(answer.dark)
+            self.screen_colour = chosen
+            # The hints are chosen against the screen, not independently of
+            # it: what makes a hint legible is the contrast with whatever the
+            # machine's own output is wearing.
+            self.hint_colour = (
+                hint_colour or os.environ.get("EMIX_HINT_COLOUR") or default_hint(chosen)
+            )
         #: The last line that reached dispatch, for EXPLAIN.
         self.last_invocation: Invocation | None = None
         #: The last failure, for EXPLAIN.
@@ -270,7 +298,7 @@ class Shell:
 
     def split(self, line: str) -> list[str]:
         try:
-            return shlex.split(line)
+            return _split_words(line)
         except ValueError as error:
             raise EmixError(Code.SYNTAX, line, str(error)) from error
 
@@ -288,28 +316,59 @@ class Shell:
         """Read, evaluate and print until the personality stops."""
         self._enable_history()
         self._enable_completion()
-        self.write(self.banner())
-        while self.running:
-            try:
-                line = self.read_line()
-            except KeyboardInterrupt:
-                self.write("^C\n")
-                continue
-            except EOFError:
-                self.write("\n" + self.farewell())
-                break
-            self.execute(line)
+        with self.session():
+            self.write(self.banner())
+            while self.running:
+                try:
+                    line = self.read_line()
+                except KeyboardInterrupt:
+                    self.write("^C\n")
+                    continue
+                except EOFError:
+                    self.write("\n" + self.farewell())
+                    break
+                self.execute(line)
         self._save_history()
         return 0
 
     def read_line(self) -> str:
+        pending = self.take_typed_ahead()
+        if pending is not None:
+            self.write(self.prompt() + pending + "\n")
+            return pending
+        # Whatever is left was never finished, so it is a prefix to go on
+        # typing, not a command. It is consumed here either way: offering it
+        # twice would be worse than not offering it at all.
+        prefix, self.typed_ahead = self.typed_ahead, ""
         if self.interactive:
-            return input(self.prompt())
+            return self._input(self.prompt(), prefix)
         self.write(self.prompt())
         line = self.stdin.readline()
         if not line:
             raise EOFError
-        return line.rstrip("\n")
+        return prefix + line.rstrip("\n")
+
+    def _input(self, prompt: str, prefix: str) -> str:
+        """Read a line that already has ``prefix`` typed into it.
+
+        The user typed those characters and did not press Return, so they
+        belong in the editor waiting to be finished or erased. Nothing is
+        executed on a guess, and half a line is a guess.
+        """
+        if not prefix:
+            return input(prompt)
+        try:
+            import readline
+        except ImportError:  # pragma: no cover - readline is absent on some hosts
+            # No editor to seed. Show what was captured so it does not vanish
+            # silently, then let them type it rather than typing it for them.
+            self.write(f"{prompt}{prefix}\n")
+            return input(prompt)
+        readline.set_startup_hook(lambda: readline.insert_text(prefix))
+        try:
+            return input(prompt)
+        finally:
+            readline.set_startup_hook()
 
     def execute(self, line: str) -> bool:
         """Dispatch one line, converting expected failures into house style.
@@ -461,6 +520,11 @@ class Shell:
             return self._verb_hints(invocation.verb)
         if error.code in {Code.NO_FILE, Code.NOT_A_FILE} and error.subject:
             return self._file_hints(error.subject)
+        if error.code is Code.NEEDS_SHELL:
+            # The house-style error cannot carry this: no period system had a
+            # concept of refusing a program. It is an Emix act, so it is said
+            # in Emix's voice, which is what the marker is for.
+            return explain(error.code.name, self.explanations)
         return []
 
     def _verb_hints(self, verb: str) -> list[str]:
@@ -488,8 +552,14 @@ class Shell:
         """
         if self.hint_colour == "none":
             return text
+        # A hint's reset would also switch the phosphor off, so each painted
+        # line turns it back on rather than leaving the rest of the screen
+        # plain behind it.
+        back = sgr(self.screen_colour)
         painted = [
-            line if not line.strip() or "\033[" in line else colourise(line, self.hint_colour)
+            line
+            if not line.strip() or "\033[" in line
+            else colourise(line, self.hint_colour) + back
             for line in text.split("\n")
         ]
         return "\n".join(painted)
@@ -631,14 +701,19 @@ class Shell:
             resolved = self.resolve_document(invocation.args[0])
             document, new_name, home = resolved.host, resolved.new_name, resolved.home
 
-        return open_session(
-            profile,  # type: ignore[arg-type]
-            document=document,
-            new_name=new_name,
-            home=home,
-            stream=self.stdout,
-            confirm=lambda question: "Y" if self.confirm(question) else "N",
-        )
+        try:
+            return open_session(
+                profile,  # type: ignore[arg-type]
+                document=document,
+                new_name=new_name,
+                home=home,
+                stream=self.stdout,
+                confirm=lambda question: "Y" if self.confirm(question) else "N",
+            )
+        finally:
+            # A real application owned the terminal and set its own
+            # attributes. Whatever it left behind, the screen is ours again.
+            self.light_phosphor()
 
     def resolve_document(self, spec: str) -> ResolvedDocument:
         """Turn what the user typed into one host file, or one name to create.
@@ -660,13 +735,68 @@ class Shell:
 
     def run_host(self, invocation: Invocation) -> int:
         """Offer the line to the host as an executable, with no shell."""
-        return run_host_command([invocation.verb, *invocation.args], cwd=self.drives.default)
+        try:
+            return run_host_command([invocation.verb, *invocation.args], cwd=self.drives.default)
+        finally:
+            # The host program inherited the terminal and may have reset it.
+            self.light_phosphor()
 
     # -- output ---------------------------------------------------------
 
     def write(self, text: str) -> None:
         self.stdout.write(text)
         self.stdout.flush()
+
+    def take_typed_ahead(self) -> str | None:
+        """The next *finished* line the user typed before Emix was listening.
+
+        Only a line they completed. Anything still being typed when the probe
+        read it is not a command they asked to run — ``ERA *.TXT`` with no
+        Return behind it must never become ``ERA *.TXT``. That fragment stays
+        put for :meth:`read_line` to hand to the editor instead.
+
+        ``None`` means nothing finished is waiting, which is not the same as
+        an empty line: a bare Return is still a line the user pressed.
+        """
+        found = _LINE_END.search(self.typed_ahead)
+        if not found:
+            return None
+        line = self.typed_ahead[: found.start()]
+        self.typed_ahead = self.typed_ahead[found.end() :]
+        return line
+
+    @contextlib.contextmanager
+    def session(self) -> Iterator[None]:
+        """Light the phosphor for the duration, and always put it out.
+
+        Every route into the shell goes through here, not only the REPL. A
+        one-shot ``-c`` writes to the same terminal and can paint the same
+        hints, so it has to hand the terminal back in the same state — the
+        alternative is a shell prompt left green for the rest of the day.
+        """
+        self.light_phosphor()
+        try:
+            yield
+        finally:
+            # The terminal belongs to the user's shell after this, and a
+            # session that dies mid-write must not leave it green.
+            self.dim_phosphor()
+
+    def light_phosphor(self) -> None:
+        """Turn the main text colour on, once. Everything after inherits it.
+
+        Set rather than wrapped: a monochrome screen has one colour, and
+        re-stating it around every line would put an escape sequence into
+        output that is meant to read as the machine's own.
+        """
+        start = sgr(self.screen_colour)
+        if start:
+            self.write(start)
+
+    def dim_phosphor(self) -> None:
+        """Hand the terminal back the way we found it."""
+        if self.screen_colour != "none":
+            self.write("\033[0m")
 
     def confirm(self, question: str) -> bool:
         """Ask a yes/no question. Anything but an explicit yes means no."""
@@ -751,6 +881,23 @@ class Shell:
             pass
 
 
+def _split_words(line: str) -> list[str]:
+    """Word-split a command line, respecting quotes.
+
+    This is :func:`shlex.split` with one change: on Windows a backslash is a
+    path separator, not an escape character. Left alone, the POSIX lexer turns
+    ``C:\\Users\\me\\notes.txt`` into ``C:Usersmenotes.txt``, which is not a
+    path anybody can act on.
+    """
+    lexer = shlex.shlex(line, posix=True)
+    lexer.whitespace_split = True
+    # Emix has no comment syntax; a '#' is an ordinary character in a name.
+    lexer.commenters = ""
+    if on_windows():
+        lexer.escape = ""
+    return list(lexer)
+
+
 def _split_first_word(line: str) -> tuple[str, str, str]:
     """Split ``line`` into its first word, the gap, and everything after."""
     match = re.search(r"\s", line)
@@ -767,7 +914,18 @@ def _is_a_tty(stream: TextIO) -> bool:
 
 
 def default_history_path(key: str) -> Path:
-    """Per-personality history file, honouring ``XDG_STATE_HOME``."""
+    """Per-personality history file, in whatever this host calls that place.
+
+    ``XDG_STATE_HOME`` on Unix, ``%LOCALAPPDATA%`` on Windows. A Windows user
+    told to look in ``~/.local/state`` would be being told about somebody
+    else's computer.
+    """
     base = os.environ.get("XDG_STATE_HOME")
-    root = Path(base) if base else Path.home() / ".local" / "state"
+    if base:
+        root = Path(base)
+    elif on_windows():
+        local = os.environ.get("LOCALAPPDATA")
+        root = Path(local) if local else Path.home() / "AppData" / "Local"
+    else:
+        root = Path.home() / ".local" / "state"
     return root / "emix" / f"{key}_history"

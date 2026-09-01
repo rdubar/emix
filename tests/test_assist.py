@@ -361,9 +361,11 @@ def test_explain_does_not_offer_advice_about_an_unrelated_command(root):
 
 def test_no_color_prevents_the_terminal_probe_entirely(monkeypatch, root):
     """M1: probing a terminal whose answer we discard is pure noise."""
+    from emix.terminal import Reply
+
     monkeypatch.setenv("NO_COLOR", "1")
     probed = []
-    monkeypatch.setattr("emix.shell.background_is_dark", lambda *a: probed.append(True) or True)
+    monkeypatch.setattr("emix.shell.ask_background", lambda *a: probed.append(True) or Reply())
 
     shell = shell_for("cpm", root, strict=False)
 

@@ -1,0 +1,31 @@
+name: Historical inaccuracy
+description: Emix behaves differently from the real system
+labels: ["accuracy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These are the most valuable reports Emix gets. Where Emix departs from
+        history on purpose it should say so — if it did not say so, that is
+        itself the bug.
+  - type: dropdown
+    id: personality
+    attributes:
+      label: Personality
+      options: ["cpm — CP/M 2.2", "vms — VAX/VMS DCL", "cms — IBM VM/CMS"]
+    validations:
+      required: true
+  - type: textarea
+    id: difference
+    attributes:
+      label: What Emix does, and what the real system did
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source
+      description: A manual, a listing, a screenshot, or your own memory of using it — all welcome, just say which.
+    validations:
+      required: true

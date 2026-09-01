@@ -1,0 +1,8 @@
+# Golden transcripts are compared byte for byte against what a session
+# printed. A Windows checkout that rewrote their line endings would fail every
+# one of them for a reason that has nothing to do with Emix.
+tests/golden/*.txt text eol=lf
+
+# Same reasoning for the fixtures a test writes and reads back.
+*.toml text eol=lf
+*.py text eol=lf

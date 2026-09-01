@@ -20,11 +20,26 @@ import tomllib
 
 from emix.assist import COLOURS
 from emix.errors import Code, EmixError
+from emix.host import on_windows
 
 #: Checked before the default location.
 ENVIRONMENT = "EMIX_CONFIG"
 
-_DEFAULT = Path("~/.config/emix/emix.toml")
+_DEFAULT_NAME = "emix.toml"
+
+
+def config_dir() -> Path:
+    """Where this host keeps per-user configuration.
+
+    ``~/.config`` on Unix, ``%APPDATA%`` on Windows. Unix's spelling works on
+    Windows too if you make the directory, but nobody would think to look
+    there, and a setting the user cannot find is a setting that does not work.
+    """
+    if on_windows():
+        roaming = os.environ.get("APPDATA")
+        base = Path(roaming) if roaming else Path.home() / "AppData" / "Roaming"
+        return base / "emix"
+    return Path("~/.config/emix").expanduser()
 
 
 @dataclass(frozen=True)
@@ -38,6 +53,8 @@ class Config:
     #: Empty means "not chosen", which lets Emix ask the terminal instead of
     #: quietly overriding the answer with a default.
     hint_colour: str = ""
+    #: The main text colour. Empty means "not chosen", as above.
+    screen: str = ""
 
     def mounts_for(self, personality: str) -> list[Path]:
         """Configured drives for a personality, falling back to the default."""
@@ -45,8 +62,9 @@ class Config:
 
 
 def config_path() -> Path:
+    """The configuration file, in whatever this host calls that place."""
     override = os.environ.get(ENVIRONMENT)
-    return Path(override).expanduser() if override else _DEFAULT.expanduser()
+    return Path(override).expanduser() if override else config_dir() / _DEFAULT_NAME
 
 
 def load(path: Path | None = None) -> Config:
@@ -65,11 +83,8 @@ def load(path: Path | None = None) -> Config:
     if not isinstance(emix, dict):
         raise EmixError(Code.SYNTAX, str(source), "'emix' must be a table")
 
-    colour = str(emix.get("hint-colour", ""))
-    if colour and colour not in COLOURS:
-        raise EmixError(
-            Code.SYNTAX, str(source), f"unknown hint-colour {colour!r} (try {', '.join(COLOURS)})"
-        )
+    colour = _colour(emix, "hint-colour", source)
+    screen = _colour(emix, "screen", source)
 
     strict = emix.get("strict")
     if strict is not None and not isinstance(strict, bool):
@@ -94,7 +109,18 @@ def load(path: Path | None = None) -> Config:
         drives=drives,
         strict=strict,
         hint_colour=colour,
+        screen=screen,
     )
+
+
+def _colour(emix: dict[str, object], key: str, source: Path) -> str:
+    """One colour-valued key, refused by name if it is not a colour Emix has."""
+    value = str(emix.get(key, ""))
+    if value and value not in COLOURS:
+        raise EmixError(
+            Code.SYNTAX, str(source), f"unknown {key} {value!r} (try {', '.join(COLOURS)})"
+        )
+    return value
 
 
 EXAMPLE = (
@@ -104,6 +130,7 @@ EXAMPLE = (
     'personality = "cpm"\n'
     "strict = false\n"
     'hint-colour = "yellow"     # or cyan, green, magenta, blue, red, grey, none\n'
+    'screen = "green"           # main text; the default is green on a dark terminal\n'
     "\n"
     "[drives]\n"
     '# Mounted in order. "default" applies to any personality without its own.\n'

@@ -1,5 +1,89 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Windows support**, covered by CI alongside macOS and Linux. The console is
+  asked for permission to obey escape sequences (`SetConsoleMode`), which it
+  does not grant by default and without which Emix would print its colours
+  rather than wear them. Settings and history go where Windows keeps such
+  things — `%APPDATA%\emix\` and `%LOCALAPPDATA%\emix\` — because a user told
+  to look in `~/.config` is being told about somebody else's computer.
+  `emix-shell[windows]` pulls in `pyreadline3` for the tab completion and
+  history that `readline` provides everywhere else; the default install still
+  has no runtime dependencies. The Win32 calls declare their `argtypes` and
+  `restype`: `GetStdHandle` returns a pointer-sized `HANDLE`, which an
+  undeclared call would truncate to a C `int` on 64-bit Windows. The console
+  is only consulted about the process's own output — a shell writing to a
+  buffer, a capture or a file is not subject to a question the console cannot
+  answer for it.
+
+  The background colour is reported as **unknown** there, so the screen stays
+  plain unless asked. Windows has no termios to hold an OSC 11 conversation
+  over, and the legacy console attribute word cannot describe a Windows
+  Terminal profile's arbitrary RGB background — a nibble reading as black may
+  be rendering white. Set `--screen bright-green`, `$EMIX_SCREEN`, or the
+  `screen` key to light the phosphor on Windows.
+- Issue templates, including one for historical inaccuracies, which are the
+  most valuable reports Emix can get.
+
+### Changed
+
+- Green phosphor now colours the **main text**, not the hints. On a terminal
+  Emix can tell is dark, the whole session is green; a light terminal, or one
+  that will not answer, is left plain, because green on a light ground is
+  merely hard to read. The colour is set once and inherited rather than
+  wrapped around each line, so output meant to read as the machine's own
+  carries no escape sequences, and it is re-asserted after a host command or
+  an application has had the terminal.
+- Hints are amber against the phosphor, and restore it behind themselves, so
+  a hint interrupts the screen rather than ending it. Both defaults are the
+  bright half of the ANSI sixteen: many colour schemes render the dim green as
+  a muddy yellow-green, too close to amber to tell apart at a glance. A screen
+  set to amber gives up the hue and gets white hints instead.
+
+### Fixed
+
+- Host fallthrough could not find a program on Windows that was not an `.exe`.
+  `CreateProcess` searches `PATH` but only ever appends `.exe`, so names now
+  go through `shutil.which`, which honours `PATHEXT`. Unix is untouched, where
+  the host already does this itself. **Batch files are refused out loud**:
+  Windows runs a `.bat` or `.cmd` through its command processor even when
+  Python is told not to use a shell, re-parsing the arguments by `cmd.exe`
+  rules that Python does not escape. Running one would break "no shell, ever".
+  The refusal carries a new `NEEDS_SHELL` code, so the personality words the
+  failure in house style and the reason arrives as a marked `Emix:` hint — a
+  detail string alone was invisible, since CP/M renders `IO_ERROR` as nothing
+  but `BDOS ERR ON A: R/O`.
+- A one-shot `-c` left the terminal green. Painted output restores the
+  phosphor behind itself, but `-c` never ran the lifecycle that puts it out;
+  both routes now share one `Shell.session()` context manager.
+- Windows paths survive command parsing. `shlex` in POSIX mode treats `\` as
+  an escape, so `C:\Users\me\notes.txt` arrived as `C:Usersmenotes.txt`.
+- The terminal background probe no longer eats a command typed or pasted
+  during the first tenth of a second. `tty.setraw` defaults to `TCSAFLUSH`,
+  which discards pending input before the probe can read it; it now uses
+  `TCSANOW`, and anything read that was not part of the terminal's reply is
+  replayed as the session's first commands instead of being dropped. Found on
+  a simulated Raspberry Pi console, but it affected every terminal that does
+  not export `COLORFGBG`. Only *finished* lines are replayed — a half-typed
+  `ERA *.TXT` is handed to the line editor as a prefix, never to dispatch,
+  because nothing is executed on a guess and half a line is a guess. Return is
+  recognised as CR, LF or CRLF, since raw and canonical mode spell it
+  differently.
+- The Linux framebuffer console is treated as dark without being asked. It
+  cannot answer OSC 11, so a Raspberry Pi's own console — the most
+  period-looking screen Emix runs on — was getting no phosphor at all.
+
+### Added
+
+- `--screen COLOUR`, `$EMIX_SCREEN` and a `screen` key in `emix.toml` choose
+  the main text colour, including `none` for a plain screen. `$NO_COLOR` and
+  non-terminal output still disable colour entirely.
+- The bright half of the sixteen ANSI colours, as `bright-green`,
+  `bright-white` and so on, selectable for either the screen or the hints.
+
 ## 0.3.0 — 2026-08-31
 
 Real historical applications, and assistance that teaches rather than

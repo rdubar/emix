@@ -34,6 +34,7 @@ _MESSAGES = {
     Code.SYNTAX: "BAD COMMAND FORMAT",
     Code.AMBIGUOUS_VERB: "{subject}?",
     Code.UNKNOWN_VERB: "{subject}?",
+    Code.NEEDS_SHELL: "{subject}?",
 }
 
 

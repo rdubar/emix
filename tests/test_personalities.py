@@ -6,6 +6,7 @@ import io
 
 import pytest
 
+from conftest import needs_symlinks
 from emix.personalities import DRIVE_NAMES, PERSONALITIES
 from emix.personalities.cms import CmsShell
 from emix.personalities.cpm import CpmShell
@@ -253,6 +254,7 @@ def test_every_personality_exposes_the_shared_project_commands(key, drives):
     assert "MIT LICENSE" in shouted
 
 
+@needs_symlinks
 @pytest.mark.parametrize("key", sorted(PERSONALITIES))
 def test_no_personality_can_read_outside_its_drive(key, drives, drive_root, tmp_path):
     (tmp_path / "secret.txt").write_text("must not appear")

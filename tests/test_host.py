@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import needs_symlinks
 from emix.errors import Code, EmixError
 from emix.host import Drive, DriveSet
 
 
+@needs_symlinks
 def test_symlink_pointing_outside_the_drive_is_refused(drives, drive_root, tmp_path):
     secret = tmp_path / "secret.txt"
     secret.write_text("host data the drive must not expose")
@@ -19,6 +21,7 @@ def test_symlink_pointing_outside_the_drive_is_refused(drives, drive_root, tmp_p
     assert caught.value.code is Code.OUTSIDE_DRIVE
 
 
+@needs_symlinks
 def test_escaping_symlink_is_absent_from_listings(drives, drive_root, tmp_path):
     (tmp_path / "secret.txt").write_text("data")
     (drive_root / "LINK.TXT").symlink_to(tmp_path / "secret.txt")
@@ -30,6 +33,7 @@ def test_escaping_symlink_is_absent_from_listings(drives, drive_root, tmp_path):
     assert listed == ["REAL.TXT"]
 
 
+@needs_symlinks
 def test_symlink_staying_inside_the_drive_is_allowed(drives, drive_root):
     (drive_root / "TARGET.TXT").write_text("fine")
     (drive_root / "LINK.TXT").symlink_to(drive_root / "TARGET.TXT")

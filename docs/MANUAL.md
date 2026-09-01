@@ -4,8 +4,8 @@ Emix lets you try older computer systems like CP/M, VAX/VMS DCL, and VM/CMS on y
 
 You dont need to use disk images or move your files into a virtual machine.
 
-Emix runs on **macOS and Linux** with Python 3.11 or newer. Windows is not
-currently supported.
+Emix runs on **macOS, Linux and Windows** with Python 3.11 or newer. On a
+Raspberry Pi it runs on the Pi's own console as happily as over SSH.
 
 You do not need to know any of the old systems before you start. This manual
 explains the odd parts as they appear.
@@ -88,14 +88,40 @@ historical applications.
 
 ### Supported systems
 
-Emix is tested on:
+Emix is tested in continuous integration on:
 
 - macOS;
-- Linux, including case-sensitive filesystems; and
+- Linux, including case-sensitive filesystems;
+- Windows; and
 - Python 3.11, 3.12, 3.13, and 3.14.
 
-You need a normal terminal. Windows support has not been built or tested; some
-terminal handling uses Unix interfaces.
+You need a normal terminal. On Windows, use **Windows Terminal** if you have
+it — the classic console window works, but Emix has to ask it for permission
+to use colour at all, and older builds may refuse.
+
+Two things are missing on Windows and nowhere else:
+
+- **Tab completion and command history** need the `readline` module, which
+  Windows does not ship. Emix runs without them; you lose the completion that
+  teaches you each system's vocabulary. Installing `pyreadline3` restores
+  both.
+- **Real CP/M applications** need RunCPM, which builds on Windows but is not
+  yet covered by these instructions.
+
+Emix will not run a `.bat` or `.cmd` from a personality prompt. Windows runs
+batch files through its command processor, which would re-read your arguments
+as shell syntax — and Emix never uses a shell. The personality reports the
+failure in its own words and Emix explains why underneath, unless you are in
+strict mode. Call the `.exe` directly, or use WSL.
+
+The **green phosphor is off by default on Windows**, because Emix cannot find
+out what colour your console is: there is no way to ask, and the answer the
+console can give does not describe a Windows Terminal background. Rather than
+paint green onto a light screen, Emix leaves it alone. Turn it on with
+`--screen bright-green`, or put `screen = "bright-green"` in your settings.
+
+If either matters to you, **WSL** gives you the Linux experience unchanged,
+and Emix cannot tell the difference.
 
 ### Install with `uv` or `pipx`
 
@@ -195,13 +221,16 @@ scripts.
 
 ### Save your usual settings
 
-Emix reads `~/.config/emix/emix.toml` on both macOS and Linux:
+Emix reads a configuration file from wherever your system keeps such things —
+`~/.config/emix/emix.toml` on macOS and Linux, `%APPDATA%\emix\emix.toml` on
+Windows. `EMIX_CONFIG` overrides it anywhere:
 
 ```toml
 [emix]
 personality = "cpm"
 strict = false
 hint-colour = "yellow"
+screen = "green"
 
 [drives]
 default = ["~/Documents"]
@@ -409,8 +438,22 @@ Scripts and pipes are strict by default. For a predictable one-command run,
 use `-c` with `--strict`; output sent through a pipe becomes strict
 automatically and contains no terminal colour codes.
 
-Set a hint colour with `--hint-colour cyan` or `EMIX_HINT_COLOUR=cyan`. Set
-`NO_COLOR=1` to disable colour and terminal colour probing completely.
+Colour comes in two parts. The **screen** is the main text: green phosphor
+where Emix can tell the terminal is dark, and nothing at all where it cannot,
+since green on a light background is unreadable. Set it yourself with
+`--screen amber` or `EMIX_SCREEN=amber`, and `--screen none` for plain text on
+a dark terminal.
+
+**Hints** are Emix's own voice, and must not be mistaken for the machine's.
+They are amber against the green — unless the screen is itself amber, when
+there is no hue left to separate the two and they become white instead.
+
+Both defaults use the bright half of the ANSI sixteen. Many colour schemes
+render the dim green as a muddy yellow-green that sits too close to amber to
+tell apart at a glance. Set your own with `--hint-colour bright-white` or
+`EMIX_HINT_COLOUR=bright-white`; every colour has a `bright-` twin.
+
+Set `NO_COLOR=1` to disable both, and terminal colour probing with them.
 
 Tab completion and per-personality command history remain available in strict
 mode because they affect what you type, not what Emix runs.
@@ -461,7 +504,9 @@ its own repository.
 
 ### Add an application profile
 
-Create `~/.config/emix/apps.toml`:
+Create `apps.toml` beside your settings file — `~/.config/emix/apps.toml`
+on macOS and Linux. `emix apps` prints the right path for your machine along
+with a template:
 
 ```toml
 [app.ed-cpm]
@@ -691,7 +736,8 @@ command.
 ### `No applications configured`
 
 The personalities do not need application profiles. If you want real CP/M
-software, create `~/.config/emix/apps.toml` and run `emix apps` again.
+software, run `emix apps` — it prints both the path it wants and a
+template to put there.
 
 ### RunCPM is unavailable
 
@@ -723,7 +769,8 @@ automatically.
 ### Hints or colours are not wanted
 
 Use `--strict`, `STRICT ON`, or `NO_COLOR=1`, depending on whether you want to
-remove assistance, colour, or both.
+remove assistance, colour, or both. To keep the hints but lose the green,
+`--screen none` leaves the main text as your terminal's own colour.
 
 ## 12. Credits and further reading
 

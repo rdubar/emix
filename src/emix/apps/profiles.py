@@ -48,7 +48,9 @@ _KNOWN_KEYS = frozenset(
     }
 )
 
-_DEFAULT = Path("~/.config/emix/apps.toml")
+#: Alongside `emix.toml`, wherever this host keeps that. See
+#: :func:`emix.config.config_dir`.
+_DEFAULT_NAME = "apps.toml"
 
 
 @dataclass(frozen=True)
@@ -173,8 +175,10 @@ class Profile:
 
 
 def config_path() -> Path:
+    from emix.config import config_dir
+
     override = os.environ.get(ENVIRONMENT)
-    return Path(override).expanduser() if override else _DEFAULT.expanduser()
+    return Path(override).expanduser() if override else config_dir() / _DEFAULT_NAME
 
 
 def load(path: Path | None = None) -> dict[str, Profile]:

@@ -276,6 +276,7 @@ def run_host_command(argv: list[str], *, cwd: Path, timeout: float | None = None
     """
     if not argv:
         return 0
+    argv = [_resolve_program(argv[0]), *argv[1:]]
     try:
         completed = subprocess.run(argv, cwd=cwd, check=False, timeout=timeout)  # noqa: S603
     except FileNotFoundError:
@@ -287,6 +288,44 @@ def run_host_command(argv: list[str], *, cwd: Path, timeout: float | None = None
     except OSError as error:
         raise EmixError(Code.IO_ERROR, argv[0], str(error)) from error
     return completed.returncode
+
+
+def on_windows() -> bool:
+    """Whether the host is Windows.
+
+    A function rather than a constant so tests can answer for it without
+    patching :data:`os.name`, which would also turn every ``Path`` in the
+    process into a ``WindowsPath`` that a Unix host refuses to build.
+    """
+    return os.name == "nt"
+
+
+#: Windows runs these through its command processor even when Python is told
+#: not to use a shell — the arguments are re-parsed by ``cmd.exe`` rules that
+#: Python does not escape, so a file named ``a&b`` becomes a second command.
+#: Emix promises no shell, so it declines rather than quietly breaking that.
+_BATCH_SUFFIXES = frozenset({".bat", ".cmd"})
+
+
+def _resolve_program(name: str) -> str:
+    """The program to run, resolved the way the host itself would resolve it.
+
+    Windows needs this and Unix does not. ``CreateProcess`` searches ``PATH``
+    but only ever appends ``.exe``, so a program on the path is invisible to
+    :mod:`subprocess` unless :func:`shutil.which`, which honours ``PATHEXT``,
+    finds it first.
+
+    Batch files are the exception, and are refused out loud. Running one is
+    running a shell, whatever ``shell=False`` says.
+    """
+    if not on_windows():
+        return name
+    spelled = name
+    if os.sep not in name and not (os.altsep and os.altsep in name):
+        spelled = shutil.which(name) or name
+    if Path(spelled).suffix.casefold() in _BATCH_SUFFIXES:
+        raise EmixError(Code.NEEDS_SHELL, name, spelled)
+    return spelled
 
 
 def terminal_width(default: int = 80) -> int:
