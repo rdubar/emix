@@ -1,25 +1,43 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-09-01
 
-### Fixed
-
-- **CP/M accepts a bare drive letter again.** Typing `B:` at the `A>` prompt
-  selected drive B and changed the prompt, and it did not work — because
-  selecting a drive is not a verb in the command table, it is something the
-  CCP recognised on its own. An unmounted drive answers `BDOS ERR ON B:
-  SELECT`, which this personality already knew how to word. Found while
-  testing `BECOME`, which is the sort of gap the historical-inaccuracy issue
-  template exists to collect.
+The engine becomes visible. Emix has been several vocabularies over one
+engine since 0.2, and until now seeing the second one meant quitting:
+`TRANSLATE` says one thing in every vocabulary at once, and `BECOME` hands a
+session between personalities over the same files. A fourth personality
+arrives to be translated — one that never existed.
 
 ### Added
 
-- **`SETUP`, and `emix --setup`**, reporting what is configured and what is
-  missing — where the settings and application files are, whether each is
-  present, and every piece WOPR's optional conversation needs. It reads: it
-  never writes, prompts, or stores, and a key is reported as present or absent
-  and never printed. Answers "is this going to work?" before somebody finds
-  out one failure at a time.
+- **`TRANSLATE`** says one thing in every vocabulary at once —
+  `TRANSLATE COPY` answers `PIP NEW=OLD`, `COPY` and `COPYFILE` together.
+  Ask in whichever vocabulary you have: a modern habit (`cp`), a concept
+  (`COPY`), or any of the three systems' own verbs (`PIP`, `COPYFILE`).
+
+  Emix has always been several vocabularies over one engine, and until now no
+  command showed more than one of them, so the shared engine was implied
+  rather than visible. Nothing new had to be learned to build it: every
+  personality already declared its word for every concept, because that is
+  what the assistance layer translates from.
+
+  Where a system has no way to say something, it says so and explains why —
+  CP/M 2.2 had no directories at all, so it cannot change to one. A gap is a
+  fact about the machine, and often a better one than any of its verbs.
+
+- **`BECOME`** hands the session to another personality without leaving it,
+  keeping the mounts. `BECOME VMS` at a CP/M prompt continues over the same
+  files under DCL: the same host folder answers to `A:`, `DKA0:` and filemode
+  `A` in turn, and the drive you were on is the drive you land on. A system
+  with fewer drive names than you have mounts refuses rather than drop one.
+
+  The default directory does not carry over, deliberately — the three systems
+  disagree about whether directories exist, and CP/M 2.2 has none, so the only
+  thing that means the same in all of them is which mount you are on.
+
+  Three vocabularies over one engine was always the design; until now, seeing
+  the second one meant quitting.
+
 - **A fourth personality: `wopr`**, the war room computer from *WarGames*.
   `LIST GAMES` gives the list, and the one that is not a game gets the answer
   it deserves — a straight-faced refusal, which is both the joke and the
@@ -35,34 +53,7 @@
   The files under it are entirely real, and every rule still applies: `PURGE`
   confirms before deleting, drives stay sealed, and `PLAY CHESS` answers that
   Emix ships no games, because it ships nothing.
-- **WOPR prints at terminal speed**, one line at a time with a pause between,
-  which is most of why the games list is unsettling rather than merely long.
-  `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
-  only: a pipe, a script or a golden transcript gets its output at once.
-- **`workspace` in `emix.toml`** is an alternative to the environment
-  variable, which wins when both are set. A workspace id is an identifier
-  rather than a credential, so unlike a key it belongs in a file — and a file
-  is not invisible to terminal windows that were already open, which is the
-  trap that cost an afternoon. The error that sends you looking now names the
-  Console page, what to click, and what the answer looks like.
-- **`$EMIX_ANTHROPIC_WORKSPACE_ID`** names the workspace for an
-  identity-linked key, which can act in several and will not guess. Sent as an
-  `anthropic-workspace-id` header, because the SDK's own `workspace_id`
-  argument belongs to the AWS and Vertex backends rather than a first-party
-  key. Nothing is sent when none is named. The failure it fixes now explains
-  itself instead of quoting a 400.
-- **`$EMIX_ANTHROPIC_API_KEY`** is read before the SDK's own credential
-  resolution. `ANTHROPIC_API_KEY` is not Emix's variable to occupy: every
-  Anthropic tool on the machine reads it, and Claude Code will bill an API
-  account rather than a subscription when it finds one set. Exporting a key
-  globally for the sake of a joke personality should not break the thing you
-  actually work in. `ANTHROPIC_API_KEY` and `ant auth login` still work for
-  anyone with no reason to keep them apart.
-- **`STATUS`** in WOPR reports what is switched on, and `$EMIX_CONVERSE=1`
-  turns conversation on for every session rather than each one. Conversation
-  is per-session and invisible, which made "EMIX SHIPS NO GAMES" look like a
-  refusal rather than a signpost; the banner and every unplayable game now say
-  how to start talking.
+
 - **WOPR can hold a conversation**, with `CONVERSE ON` and
   `emix-shell[ai]`. Anything it has no command for goes to a language model
   answering in character, so the games list stops being a joke and becomes
@@ -80,42 +71,56 @@
   returns a string, the caller prints it, and there is no path from there to a
   verb or a path. There is a test that has the model reply `PURGE NOTES.TXT`
   and asserts the file is still there.
-- **`BECOME`** hands the session to another personality without leaving it,
-  keeping the mounts. `BECOME VMS` at a CP/M prompt continues over the same
-  files under DCL: the same host folder answers to `A:`, `DKA0:` and filemode
-  `A` in turn, and the drive you were on is the drive you land on. A system
-  with fewer drive names than you have mounts refuses rather than drop one.
 
-  The default directory does not carry over, deliberately — the three systems
-  disagree about whether directories exist, and CP/M 2.2 has none, so the only
-  thing that means the same in all three is which mount you are on.
+- **WOPR prints at terminal speed**, one line at a time with a pause between,
+  which is most of why the games list is unsettling rather than merely long.
+  `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
+  only: a pipe, a script or a golden transcript gets its output at once.
 
-  Three vocabularies over one engine was always the design; until now, seeing
-  the second one meant quitting.
-- **`TRANSLATE`** says one thing in all three vocabularies at once —
-  `TRANSLATE COPY` answers `PIP NEW=OLD`, `COPY` and `COPYFILE` together.
-  Ask in whichever vocabulary you have: a modern habit (`cp`), a concept
-  (`COPY`), or any of the three systems' own verbs (`PIP`, `COPYFILE`).
+- **`STATUS`** in WOPR reports what is switched on, and `$EMIX_CONVERSE=1`
+  turns conversation on for every session rather than each one. Conversation
+  is per-session and invisible, which made "EMIX SHIPS NO GAMES" look like a
+  refusal rather than a signpost; the banner and every unplayable game now say
+  how to start talking.
 
-  Emix has always been three vocabularies over one engine, and until now no
-  command showed more than one of them, so the shared engine was implied
-  rather than visible. Nothing new had to be learned to build it: every
-  personality already declared its word for every concept, because that is
-  what the assistance layer translates from.
+- **`SETUP`, and `emix --setup`**, reporting what is configured and what is
+  missing — where the settings and application files are, whether each is
+  present, and every piece WOPR's optional conversation needs. It reads: it
+  never writes, prompts, or stores, and a key is reported as present or absent
+  and never printed. Answers "is this going to work?" before somebody finds
+  out one failure at a time.
 
-  Where a system has no way to say something, it says so and explains why —
-  CP/M 2.2 had no directories at all, so it cannot change to one. A gap is a
-  fact about the machine, and often a better one than any of its verbs.
+- **`$EMIX_ANTHROPIC_API_KEY`** is read before the SDK's own credential
+  resolution. `ANTHROPIC_API_KEY` is not Emix's variable to occupy: every
+  Anthropic tool on the machine reads it, and Claude Code will bill an API
+  account rather than a subscription when it finds one set. Exporting a key
+  globally for the sake of a joke personality should not break the thing you
+  actually work in. `ANTHROPIC_API_KEY` and `ant auth login` still work for
+  anyone with no reason to keep them apart.
 
-- Setting up the CP/M application bridge can be handed to a coding agent.
-  `AGENTS.md` carries instructions written to be followed rather than read —
-  which build flag matters and why, where the profile belongs on each
-  operating system, and a verification step that must pass before reporting
-  success — and the manual gives the prompt to paste. Emix still ships no
-  emulator and no software, and neither fetches any: the agent builds RunCPM
-  from its own MIT-licensed source, and the only application involved is the
-  freely distributable editor already on its sample disk. Written steps stay
-  first for anyone who does not use an agent.
+- **`$EMIX_ANTHROPIC_WORKSPACE_ID`** names the workspace for an
+  identity-linked key, which can act in several and will not guess. Sent as an
+  `anthropic-workspace-id` header, because the SDK's own `workspace_id`
+  argument belongs to the AWS and Vertex backends rather than a first-party
+  key. Nothing is sent when none is named. The failure it fixes now explains
+  itself instead of quoting a 400.
+
+- **`workspace` in `emix.toml`** is an alternative to the environment
+  variable, which wins when both are set. A workspace id is an identifier
+  rather than a credential, so unlike a key it belongs in a file — and a file
+  is not invisible to terminal windows that were already open, which is the
+  trap that cost an afternoon. The error that sends you looking now names the
+  Console page, what to click, and what the answer looks like.
+
+### Fixed
+
+- **CP/M accepts a bare drive letter again.** Typing `B:` at the `A>` prompt
+  selected drive B and changed the prompt, and it did not work — because
+  selecting a drive is not a verb in the command table, it is something the
+  CCP recognised on its own. An unmounted drive answers `BDOS ERR ON B:
+  SELECT`, which this personality already knew how to word. Found while
+  testing `BECOME`, which is the sort of gap the historical-inaccuracy issue
+  template exists to collect.
 
 ## 0.4.0 — 2026-09-01
 
