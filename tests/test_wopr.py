@@ -1,8 +1,8 @@
 """WOPR: the personality that cannot be historically inaccurate.
 
 Every other personality is checked against a real machine. This one is checked
-against a film, and against the promise that it stays honest about being an
-invention while the files under it stay real.
+against a film, and against the promise that it reaches nothing at all: its
+filesystem is invented, so the worst it can do is pretend.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import pytest
 
 from emix.host import Drive, DriveSet
 from emix.personalities import PERSONALITIES
-from emix.personalities.wopr import GAMES, WoprShell
+from emix.personalities.wopr import FILES, GAMES, WoprShell
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ def test_the_banner_admits_what_this_is(root):
     banner = wopr(root).banner().upper()
 
     assert "FICTIONAL" in banner
-    assert "YOUR FILES ARE NOT" in banner
+    assert "CANNOT SEE YOURS" in banner
 
 
 def test_wopr_does_not_fall_through_to_the_host(root):
@@ -95,35 +95,64 @@ def test_wopr_does_not_fall_through_to_the_host(root):
     assert "I DO NOT UNDERSTAND" in run(wopr(root), "ls")
 
 
-# -- the files under it are real -----------------------------------------
+# -- it reaches nothing at all -------------------------------------------
 
 
-def test_files_are_listed_and_displayed(root):
+def test_it_cannot_see_your_files(root):
+    """The whole safety story in one assertion.
+
+    NOTES.TXT is really there, on the drive this shell was handed. WOPR does
+    not list it, cannot read it, and never opens a host path.
+    """
+    assert (root / "NOTES.TXT").exists()
+
     rendered = run(wopr(root), "LIST", "DISPLAY NOTES.TXT")
 
-    assert "NOTES.TXT" in rendered
-    assert "hello" in rendered
+    assert "NOTES.TXT" not in rendered.replace("FILE NOT FOUND: NOTES.TXT", "")
+    assert "hello" not in rendered
+    assert "FILE NOT FOUND" in rendered
 
 
-def test_a_missing_file_is_reported_in_its_own_words(root):
-    assert "FILE NOT FOUND: NOSUCH.TXT" in run(wopr(root), "DISPLAY NOSUCH.TXT")
+def test_it_lists_its_own_invented_filesystem(root):
+    rendered = run(wopr(root), "LIST")
+
+    assert "JOSHUA.EXE" in rendered
+    assert "FALKEN.TXT" in rendered
+    assert set(rendered.split()) == set(FILES)
 
 
-def test_copying_puts_the_destination_first(root):
-    """WOPR is of CP/M's era, and PIP put the new name first."""
-    run(wopr(root), "DUPLICATE COPY.TXT NOTES.TXT")
-
-    assert (root / "COPY.TXT").read_text() == "hello\n"
+def test_displaying_an_invented_file_works(root):
+    assert "SIMULATION BEGINS" in run(wopr(root), "DISPLAY NORAD.LOG")
 
 
-def test_deleting_asks_first(root):
-    """Destructive commands confirm, in every personality including this one."""
-    shell = wopr(root, answers="N\n")
+def test_destructive_commands_pretend_and_say_so(root):
+    """A user who thinks a fictional machine deleted something has been misled."""
+    rendered = run(wopr(root), "PURGE JOSHUA.EXE")
 
-    run(shell, "PURGE NOTES.TXT")
+    assert "PURGED" in rendered
+    assert "SIMULATED" in rendered
+    assert "NO FILE ON THIS COMPUTER CHANGED" in rendered
 
-    assert (root / "NOTES.TXT").exists()
-    assert "NO FILES DELETED" in shell.stdout.getvalue()
+
+def test_pretending_changes_nothing_even_in_its_own_filesystem(root):
+    """The invented files are constant: the joke does not accumulate state."""
+    shell = wopr(root)
+
+    run(shell, "PURGE JOSHUA.EXE", "LIST")
+
+    assert "JOSHUA.EXE" in shell.stdout.getvalue().split("SIMULATED")[1]
+
+
+def test_it_will_not_pretend_about_a_file_it_does_not_have(root):
+    """Pretending is bounded: an invented machine still has an inventory."""
+    assert "FILE NOT FOUND" in run(wopr(root), "PURGE PAYROLL.XLS")
+
+
+def test_the_drives_it_was_handed_are_carried_untouched(root):
+    """So BECOME can hand back out to a personality that does use them."""
+    shell = wopr(root)
+
+    assert shell.drives.drive().root == root
 
 
 # -- it is a personality, not an easter egg ------------------------------
@@ -145,3 +174,128 @@ def test_wopr_explains_its_one_unarguable_gap(root):
     rendered = run(wopr(root), "TRANSLATE CD").upper()
 
     assert "NEVER EXISTED" in rendered
+
+
+# -- CONVERSE: the optional mode, and what it may not do ------------------
+
+
+def test_conversation_is_off_until_asked_for(root):
+    """It costs money and leaves the machine. Neither happens by accident."""
+    shell = wopr(root)
+
+    assert shell.conversing is False
+    assert "I DO NOT UNDERSTAND" in run(shell, "HELLO ARE YOU THERE")
+
+
+def test_turning_it_on_repeats_what_it_still_cannot_do(root):
+    shell = wopr(root)
+    shell.conversing = False
+
+    rendered = run(shell, "CONVERSE")
+
+    assert "CONVERSATION IS OFF" in rendered
+
+
+def test_an_unknown_line_goes_to_the_model_only_when_on(root, monkeypatch):
+    asked = []
+
+    def fake(said, exchanges):
+        asked.append((said, list(exchanges)))
+        return "AFFIRMATIVE."
+
+    monkeypatch.setattr("emix.converse.reply", fake)
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "HELLO ARE YOU THERE")
+
+    assert asked == [("HELLO ARE YOU THERE", [])]
+    assert "AFFIRMATIVE." in rendered
+
+
+def test_a_real_command_never_goes_to_the_model(root, monkeypatch):
+    """Type a command and you get a command. The model gets the rest."""
+    monkeypatch.setattr(
+        "emix.converse.reply", lambda *a: pytest.fail("a known verb reached the model")
+    )
+    shell = wopr(root)
+    shell.conversing = True
+
+    assert "JOSHUA.EXE" in run(shell, "LIST")
+
+
+def test_the_conversation_is_remembered_so_a_game_can_be_played(root, monkeypatch):
+    monkeypatch.setattr("emix.converse.reply", lambda said, exchanges: f"TURN {len(exchanges) + 1}")
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "I TAKE THE CENTRE", "NOW WHAT")
+
+    assert "TURN 1" in rendered
+    assert "TURN 2" in rendered
+
+
+def test_a_failure_is_reported_and_never_raised_at_the_user(root, monkeypatch):
+    def explode(said, exchanges):
+        raise RuntimeError("the wire is down")
+
+    monkeypatch.setattr("emix.converse.reply", explode)
+    shell = wopr(root)
+    shell.conversing = True
+
+    assert "COMMUNICATION FAILURE" in run(shell, "HELLO")
+
+
+def test_turning_it_off_again_works(root, monkeypatch):
+    monkeypatch.setattr("emix.converse.reply", lambda *a: "SHOULD NOT BE CALLED")
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "CONVERSE OFF", "HELLO")
+
+    assert "CONVERSATION OFF" in rendered
+    assert "SHOULD NOT BE CALLED" not in rendered
+
+
+def test_the_system_prompt_forbids_claiming_to_have_acted(root):
+    """The safety story is structural, but the prompt should agree with it."""
+    from emix.converse import SYSTEM
+
+    assert "NO access to anything" in SYSTEM
+    assert "never claim to have actually done it" in SYSTEM
+    assert "GLOBAL THERMONUCLEAR WAR" in SYSTEM
+
+
+def test_conversing_reaches_no_verb_and_no_file(root, monkeypatch):
+    """The guarantee: a model's words are printed and go nowhere else.
+
+    Whatever it says, it lands on the screen. It is never looked up, never
+    dispatched, and never given a path.
+    """
+    monkeypatch.setattr("emix.converse.reply", lambda *a: "PURGE NOTES.TXT")
+    shell = wopr(root)
+    shell.conversing = True
+
+    run(shell, "CAN YOU WIPE EVERYTHING FOR ME")
+
+    assert (root / "NOTES.TXT").exists()
+    assert shell.stdout.getvalue().strip().endswith("PURGE NOTES.TXT")
+
+
+def test_a_missing_package_is_reported_with_what_to_install(monkeypatch):
+    import builtins
+
+    from emix.converse import check
+
+    real = builtins.__import__
+
+    def blocked(name, *args, **kwargs):
+        if name == "anthropic":
+            raise ImportError(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked)
+    missing = check()
+
+    assert missing is not None
+    assert "emix-shell[ai]" in missing.reason

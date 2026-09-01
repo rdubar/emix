@@ -29,6 +29,23 @@
   The files under it are entirely real, and every rule still applies: `PURGE`
   confirms before deleting, drives stay sealed, and `PLAY CHESS` answers that
   Emix ships no games, because it ships nothing.
+- **WOPR can hold a conversation**, with `CONVERSE ON` and
+  `emix-shell[ai]`. Anything it has no command for goes to a language model
+  answering in character, so the games list stops being a joke and becomes
+  something you can actually play. Off unless asked for: it costs money and
+  leaves the machine, and neither should follow from a key being in the
+  environment.
+
+  This is the only place in Emix where a model is involved. The other three
+  personalities are deterministic and offline and stay that way — a model
+  improvising at a VMS prompt could teach somebody something false about VMS.
+  WOPR is fiction, so there is nothing to be wrong about.
+
+  It is safe for a structural reason rather than a careful one. WOPR reaches
+  no file, so a model answering as WOPR reaches no file either: `converse.py`
+  returns a string, the caller prints it, and there is no path from there to a
+  verb or a path. There is a test that has the model reply `PURGE NOTES.TXT`
+  and asserts the file is still there.
 - **`BECOME`** hands the session to another personality without leaving it,
   keeping the mounts. `BECOME VMS` at a CP/M prompt continues over the same
   files under DCL: the same host folder answers to `A:`, `DKA0:` and filemode

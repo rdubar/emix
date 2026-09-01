@@ -32,10 +32,10 @@ Four personalities ship today:
 | `cms` | IBM VM/CMS | *(none)* | `LISTFILE`, `TYPE`, `COPYFILE`, `RENAME`, `ERASE`, `QUERY` |
 | `wopr` | *WarGames* (1983), fictional | *(none)* | `LIST`, `DISPLAY`, `DUPLICATE`, `REDESIGNATE`, `PURGE`, `GAMES` |
 
-The first three are real systems. `wopr` is the war room computer from
-*WarGames*, and is the only personality that cannot be historically inaccurate
-— it says so in its own banner, because a prompt should be honest about what
-it is. It is also the only one that will refuse to play with you:
+The first three are real systems, and are deterministic and offline. `wopr` is
+the war room computer from *WarGames*: the only personality that cannot be
+historically inaccurate, the only one that reaches no files at all, and the
+only one that will refuse to play with you:
 
 ```text
 PLAY GLOBAL THERMONUCLEAR WAR
@@ -45,6 +45,11 @@ THE ONLY WINNING MOVE IS NOT TO PLAY.
 
 HOW ABOUT A NICE GAME OF CHESS?
 ```
+
+WOPR is also the one place a language model is welcome. `CONVERSE ON`, with
+`emix-shell[ai]` installed, lets it answer in its own words and play the games
+on its list — off unless you ask, and unable to touch anything either way,
+because WOPR has no files to reach and neither does anything answering as it.
 
 They are not four programs. They are four vocabularies over one engine, and
 the differences between them — CP/M's `NEW=OLD` argument order, DCL's

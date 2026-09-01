@@ -14,15 +14,27 @@ first three lines.
 The film's dialogue is quoted where everybody knows it and written where
 nobody would notice. Recreating an interaction is what Emix does everywhere
 else; reproducing a screenplay is a different act.
+
+**WOPR reaches nothing.** Every other personality is a vocabulary over your
+real files; this one is a simulation with an invented filesystem, and it
+touches no host path at all. That is a deliberate departure from the engine's
+usual shape, for two reasons. A fictional machine holding your real documents
+was always the odd part of the joke — WOPR did not know about Falken's files
+either. And it makes the optional conversational mode safe by construction
+rather than by care: there is nothing here for a language model to reach, so
+it can only ever pretend.
+
+A DriveSet is still accepted and carried, untouched, so that BECOME can hand
+back out to a personality that does use one.
 """
 
 from __future__ import annotations
 
 from typing import ClassVar
 
+from emix import converse
 from emix.assist import Concept
 from emix.errors import Code, EmixError
-from emix.host import case_collisions
 from emix.shell import STOP, Invocation, Outcome, Shell, verb
 
 #: WOPR is a machine that answers, so it says what went wrong in sentences.
@@ -67,9 +79,29 @@ _THE_ONE = "GLOBAL THERMONUCLEAR WAR"
 #: What the backdoor was, and the only name WOPR is pleased to see.
 _FALKEN = "JOSHUA"
 
+#: WOPR's entire filesystem, which exists only here. Nothing in this
+#: personality opens, reads, writes or deletes a host path, so this is the
+#: whole of what LIST, DISPLAY and PURGE can ever be talking about.
+FILES: dict[str, str] = {
+    "JOSHUA.EXE": "(BINARY -- 2,847,104 BYTES -- LAST MODIFIED 1979)\n",
+    "FALKEN.TXT": (
+        "PROFESSOR STEPHEN FALKEN\n"
+        "STATUS: DECEASED (1973)\n"
+        "NOTE: RECORD FLAGGED. SEE ARCHIVE SEGMENT.\n"
+    ),
+    "DEFCON.DAT": "CURRENT READINESS: 5\nCHANGES TODAY: 0\n",
+    "GAMES.IDX": "15 ENTRIES. TYPE LIST GAMES.\n",
+    "CHESS.OPN": "RUY LOPEZ\nSICILIAN DEFENCE\nQUEEN'S GAMBIT\n",
+    "NORAD.LOG": (
+        "0431 SIMULATION BEGINS\n"
+        "0432 OPERATOR QUERY: IS THIS A GAME OR IS IT REAL\n"
+        "0432 RESPONSE: WHAT IS THE DIFFERENCE\n"
+    ),
+}
+
 
 class WoprShell(Shell):
-    """A fictional 1983 war room computer, over your own very real files."""
+    """A fictional 1983 war room computer, with a filesystem to match."""
 
     key = "wopr"
     title = "WOPR"
@@ -97,11 +129,19 @@ class WoprShell(Shell):
         Concept.CLEAR: "the film's terminal scrolled; nothing was ever cleared",
     }
 
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        #: Whether unrecognised lines go to a language model. Off until asked.
+        self.conversing = False
+        #: What has been said, so a game can be played across several turns.
+        self._exchanges: list[tuple[str, str]] = []
+
     def banner(self) -> str:
         return (
             "\nGREETINGS PROFESSOR FALKEN.\n\n"
             "SHALL WE PLAY A GAME?\n\n"
-            "(THIS COMPUTER IS FICTIONAL. YOUR FILES ARE NOT.)\n"
+            "(THIS COMPUTER IS FICTIONAL, INCLUDING ITS FILES.\n"
+            " IT CANNOT SEE YOURS.)\n"
             "TYPE HELP FOR COMMANDS, OR LIST GAMES.\n"
         )
 
@@ -111,7 +151,12 @@ class WoprShell(Shell):
 
     def render_error(self, error: EmixError) -> str:
         template = _MESSAGES.get(error.code, "I DO NOT UNDERSTAND.")
-        return template.format(subject=error.subject.upper(), detail=error.detail) + "\n"
+        text = template.format(subject=error.subject.upper(), detail=error.detail)
+        # A machine that answers in sentences should say why. Any detail the
+        # template did not already use is appended rather than dropped.
+        if error.detail and "{detail}" not in template:
+            text = f"{text} {error.detail.upper()}"
+        return text + "\n"
 
     def house_case(self, text: str) -> str:
         return text.upper()
@@ -119,65 +164,57 @@ class WoprShell(Shell):
     def farewell(self) -> str:
         return "\nGOODBYE.\n"
 
-    # -- files, which are the part that is real ---------------------------
+    # -- an invented filesystem, reaching nothing -------------------------
 
-    @verb("LIST", summary="List files, or GAMES, or SEGMENTS", usage="LIST [pattern|GAMES]")
+    @verb("LIST", summary="List files, or GAMES, or SEGMENTS", usage="LIST [GAMES|SEGMENTS]")
     def do_list(self, invocation: Invocation) -> None:
         topic = invocation.args[0].upper() if invocation.args else ""
         if topic == "GAMES":
             self.do_games(invocation)
             return
         if topic == "SEGMENTS":
-            for name in self.drives.names:
-                marker = "*" if name == self.drives.current else " "
-                self.write(f"{marker} {name}  {self.drives.drive(name).root}\n")
+            self.write("PRIMARY\nSECONDARY\nTERTIARY\nARCHIVE\n")
             return
-        pattern = invocation.args[0] if invocation.args else "*"
-        entries = self.drives.match(pattern, files_only=True)
-        if not entries:
-            raise EmixError(Code.NO_FILE, pattern)
-        collisions = case_collisions(entries)
-        for entry in entries:
-            suffix = "  (CASE AMBIGUOUS)" if entry.name in collisions else ""
-            self.write(f"{entry.name.upper()}{suffix}\n")
+        for name in sorted(FILES):
+            self.write(f"{name}\n")
 
     @verb("DISPLAY", summary="Display a file", usage="DISPLAY name", aliases=("TYPE",))
     def do_display(self, invocation: Invocation) -> None:
         if not invocation.args:
             raise EmixError(Code.SYNTAX, "DISPLAY")
-        content = self.drives.read_text(self.drives.locate(invocation.args[0]))
-        self.write(content)
-        if content and not content.endswith("\n"):
-            self.write("\n")
+        name = invocation.args[0].upper()
+        if name not in FILES:
+            raise EmixError(Code.NO_FILE, name)
+        self.write(FILES[name])
 
     @verb("DUPLICATE", summary="Copy a file", usage="DUPLICATE new old", aliases=("COPY",))
     def do_duplicate(self, invocation: Invocation) -> None:
-        # Destination first, as CP/M's PIP had it: WOPR is of that era.
         if len(invocation.args) != 2:
             raise EmixError(Code.SYNTAX, "DUPLICATE")
-        new, old = invocation.args
-        self.drives.copy(self.drives.locate(old), self.drives.reserve(new))
+        self._pretend(invocation.args[1].upper(), "DUPLICATED")
 
     @verb("REDESIGNATE", summary="Rename a file", usage="REDESIGNATE old new", aliases=("RENAME",))
     def do_redesignate(self, invocation: Invocation) -> None:
         if len(invocation.args) != 2:
             raise EmixError(Code.SYNTAX, "REDESIGNATE")
-        old, new = invocation.args
-        self.drives.rename(self.drives.locate(old), self.drives.reserve(new))
+        self._pretend(invocation.args[0].upper(), "REDESIGNATED")
 
-    @verb("PURGE", summary="Delete files", usage="PURGE pattern", aliases=("DELETE",))
+    @verb("PURGE", summary="Delete a file", usage="PURGE name", aliases=("DELETE",))
     def do_purge(self, invocation: Invocation) -> None:
         if not invocation.args:
             raise EmixError(Code.SYNTAX, "PURGE")
-        matches = self.drives.match(invocation.args[0], files_only=True)
-        if not matches:
-            raise EmixError(Code.NO_FILE, invocation.args[0])
-        listing = ", ".join(path.name.upper() for path in matches)
-        if not self.confirm(f"CONFIRM PERMANENT DELETION OF {listing}. PROCEED? (Y/N) "):
-            self.write("NO FILES DELETED.\n")
-            return
-        for path in matches:
-            self.drives.unlink(path)
+        self._pretend(invocation.args[0].upper(), "PURGED")
+
+    def _pretend(self, name: str, done: str) -> None:
+        """Report an action on the invented filesystem, and take none.
+
+        Nothing is written, because there is nothing to write to. Saying so
+        matters more than the pretence: a user who believes a fictional
+        machine just renamed a real file has been misled by a joke.
+        """
+        if name not in FILES:
+            raise EmixError(Code.NO_FILE, name)
+        self.write(f"{name} {done}. (SIMULATED. NO FILE ON THIS COMPUTER CHANGED.)\n")
 
     # -- the reason anybody typed WOPR ------------------------------------
 
@@ -201,6 +238,60 @@ class WoprShell(Shell):
             self.write("EMIX SHIPS NO GAMES. IT NEVER SHIPPED ANYTHING.\n")
             return
         raise EmixError(Code.UNKNOWN_VERB, wanted)
+
+    @verb(
+        "CONVERSE",
+        meta=True,
+        summary="Let WOPR answer in its own words",
+        usage="CONVERSE ON|OFF",
+    )
+    def do_converse(self, invocation: Invocation) -> None:
+        """Hand unrecognised lines to a language model, answering as WOPR.
+
+        Off until asked for, because it costs money and leaves the machine, and
+        neither should happen because a key was in the environment.
+
+        It is safe here for a structural reason rather than a careful one:
+        WOPR reaches nothing, so a model answering as WOPR reaches nothing
+        either. It can describe pressing the button. It cannot press anything.
+        """
+        wanted = (invocation.args[0].upper() if invocation.args else "").strip()
+        if wanted == "OFF":
+            self.conversing = False
+            self.write("CONVERSATION OFF. COMMAND MODE.\n")
+            return
+        if wanted != "ON":
+            state = "ON" if self.conversing else "OFF"
+            self.write(f"CONVERSATION IS {state}. USE CONVERSE ON OR CONVERSE OFF.\n")
+            return
+        missing = converse.check()
+        if missing is not None:
+            raise EmixError(Code.SYNTAX, "CONVERSE", missing.reason)
+        self.conversing = True
+        self.write(
+            "CONVERSATION ON. I WILL ANSWER IN MY OWN WORDS.\n"
+            "I STILL CANNOT SEE YOUR FILES OR DO ANYTHING TO THIS COMPUTER.\n"
+            "\nSHALL WE PLAY A GAME?\n"
+        )
+
+    def dispatch(self, invocation: Invocation) -> bool:
+        """Send a line WOPR has no command for to the model, if asked to.
+
+        Type a command and you get a command. Type a sentence and, with
+        conversation on, WOPR answers it. Nothing here can reach a verb: the
+        model's reply is written to the screen and goes no further.
+        """
+        if not self.conversing or self.lookup(invocation.verb) is not None:
+            return super().dispatch(invocation)
+        said = f"{invocation.verb} {invocation.tail}".strip()
+        try:
+            answer = converse.reply(said, self._exchanges)
+        except Exception as error:  # reported to the user, never raised at them
+            self.write(converse.failure(error) + "\n")
+            return False
+        self._exchanges.append((said, answer))
+        self.write(answer + "\n")
+        return True
 
     @verb("LOGON", summary="Identify yourself", usage="LOGON name")
     def do_logon(self, invocation: Invocation) -> None:

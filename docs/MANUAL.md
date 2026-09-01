@@ -290,6 +290,38 @@ before deleting, and drives stay sealed.
 It is the only personality that cannot be historically inaccurate, which is
 also why it is the cheapest one Emix will ever have.
 
+#### Letting WOPR answer for itself
+
+WOPR can hold a conversation, if you ask it to and have somewhere to ask:
+
+```sh
+uv tool install "emix-shell[ai]"
+export ANTHROPIC_API_KEY=...
+emix wopr
+```
+
+```text
+CONVERSE ON
+CONVERSATION ON. I WILL ANSWER IN MY OWN WORDS.
+I STILL CANNOT SEE YOUR FILES OR DO ANYTHING TO THIS COMPUTER.
+```
+
+Anything WOPR has no command for then goes to a language model answering in
+character; commands still behave as commands. `CONVERSE OFF` stops it.
+
+**Off unless you turn it on.** It costs money and it leaves your machine, and
+neither should happen because a key happened to be in your environment.
+
+**It is the only place in Emix where a model is involved at all.** CP/M, VMS
+and CMS are deterministic and offline, and stay that way. A model improvising
+at a VMS prompt could teach you something false about VMS; WOPR is fiction, so
+there is nothing to be wrong about.
+
+**It cannot do anything.** WOPR reaches no file, so a model answering as WOPR
+reaches no file either. It can describe pressing the button. It cannot press
+anything. That is a property of the code — the model's reply is written to the
+screen and goes nowhere else — rather than a promise about the model.
+
 ### CP/M 2.2: short commands and drive letters
 
 Start it with:

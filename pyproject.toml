@@ -35,6 +35,10 @@ dependencies = []
 # simply absent there until something provides them.
 [project.optional-dependencies]
 windows = ["pyreadline3>=3.4; sys_platform == 'win32'"]
+# WOPR is fiction, so a model answering as WOPR cannot mislead anyone about a
+# real machine, and it reaches nothing. Every other personality stays
+# deterministic and offline whether this is installed or not.
+ai = ["anthropic>=1.0"]
 
 [project.urls]
 Homepage = "https://github.com/rdubar/emix"
