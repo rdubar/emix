@@ -38,6 +38,11 @@ _MESSAGES = {
 }
 
 
+#: ``B:`` on a line of its own. CP/M 2.2 had drives A: to P:, and selecting
+#: one was a CCP command in its own right rather than an entry in the table.
+_BARE_DRIVE = re.compile(r"([A-P]):", re.IGNORECASE)
+
+
 class CpmShell(Shell):
     """The CP/M 2.2 console command processor, backed by host directories."""
 
@@ -109,6 +114,23 @@ class CpmShell(Shell):
         return "".join(part if "://" in part else part.upper() for part in re.split(r"(\s+)", text))
 
     # -- file specifications --------------------------------------------
+
+    def dispatch(self, invocation: Invocation) -> bool:
+        """Intercept a bare drive letter, which the CCP treated as a command.
+
+        Typing ``B:`` at ``A>`` selected drive B and changed the prompt. It is
+        not a verb — there are sixteen of them and none is in the command table
+        — so it is recognised here rather than looked up.
+
+        An unmounted drive raises ``NO_DRIVE``, which this personality already
+        words as ``BDOS ERR ON B: SELECT``: exactly what the CCP printed, and
+        the reason the drive layer's error codes are symbolic.
+        """
+        letter = _BARE_DRIVE.fullmatch(invocation.verb)
+        if letter and not invocation.args:
+            self.drives.select(letter.group(1))
+            return True
+        return super().dispatch(invocation)
 
     def split_spec(self, spec: str) -> tuple[str | None, str]:
         """Split a CP/M ``d:name.typ`` specification into drive and name.

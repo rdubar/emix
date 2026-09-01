@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- **CP/M accepts a bare drive letter again.** Typing `B:` at the `A>` prompt
+  selected drive B and changed the prompt, and it did not work — because
+  selecting a drive is not a verb in the command table, it is something the
+  CCP recognised on its own. An unmounted drive answers `BDOS ERR ON B:
+  SELECT`, which this personality already knew how to word. Found while
+  testing `BECOME`, which is the sort of gap the historical-inaccuracy issue
+  template exists to collect.
+
 ### Added
 
 - **`BECOME`** hands the session to another personality without leaving it,

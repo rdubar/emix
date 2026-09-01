@@ -293,11 +293,22 @@ hello
 A>PIP BACKUP.TXT=NOTES.TXT
 ```
 
+If you mounted more than one folder, change drive by typing its letter and a
+colon on a line of its own. The prompt follows you:
+
+```text
+A>B:
+B>DIR
+B: SECOND   TXT
+```
+
 Things to remember:
 
 - CP/M filenames are normally limited to eight characters, a dot, and three
   more characters.
 - `PIP` and `REN` put the destination first: `NEW=OLD`.
+- A drive letter on its own changes drive; a drive letter on a file reads
+  across without moving you, as in `TYPE B:NOTES.TXT`.
 - The original CCP had six built-in commands. Emix directly provides `DIR`,
   `ERA`, `REN`, `TYPE`, and `USER`. `SAVE` depended on a memory area Emix does
   not have, so it returns `SAVE?` and explains why when assistance is on.

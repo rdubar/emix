@@ -7,6 +7,7 @@ import io
 import pytest
 
 from conftest import needs_symlinks
+from emix.host import Drive, DriveSet
 from emix.personalities import DRIVE_NAMES, PERSONALITIES
 from emix.personalities.cms import CmsShell
 from emix.personalities.cpm import CpmShell
@@ -287,3 +288,72 @@ def test_listings_distinguish_names_that_differ_only_by_case(
 
     assert "notes.txt" in rendered
     assert "NOTES.TXT" in rendered
+
+
+# -- CP/M: selecting a drive was a CCP command, not a verb ---------------
+
+
+def two_drives(tmp_path):
+    """Two mounted drives, with a file only on the second."""
+    first, second = tmp_path / "one", tmp_path / "two"
+    for folder in (first, second):
+        folder.mkdir()
+    (second / "SECOND.TXT").write_text("here\n")
+    return DriveSet([Drive.create("A", first), Drive.create("B", second)])
+
+
+def test_a_bare_drive_letter_selects_that_drive(tmp_path):
+    """`B:` at the A> prompt is how CP/M 2.2 changed drives."""
+    drives = two_drives(tmp_path)
+
+    rendered = run(CpmShell, drives, "B:", "DIR")
+
+    assert drives.current == "B"
+    assert "B: SECOND   TXT" in rendered
+
+
+def test_the_prompt_follows_the_drive(tmp_path):
+    drives = two_drives(tmp_path)
+    shell = CpmShell(drives, stdin=io.StringIO(), stdout=io.StringIO())
+
+    assert shell.prompt() == "A>"
+    shell.execute("B:")
+    assert shell.prompt() == "B>"
+
+
+def test_a_lower_case_drive_letter_works_too(tmp_path):
+    """The CCP folded case, and a user's hands do not always reach shift."""
+    drives = two_drives(tmp_path)
+
+    run(CpmShell, drives, "b:")
+
+    assert drives.current == "B"
+
+
+def test_selecting_an_unmounted_drive_is_a_bdos_error(tmp_path):
+    """Exactly what the real CCP printed, which the error codes already knew."""
+    drives = two_drives(tmp_path)
+
+    rendered = run(CpmShell, drives, "P:")
+
+    assert "BDOS ERR ON P: SELECT" in rendered
+    assert drives.current == "A"
+
+
+def test_a_drive_prefix_on_a_file_is_not_a_drive_change(tmp_path):
+    """`TYPE B:SECOND.TXT` reads across; it does not move you."""
+    drives = two_drives(tmp_path)
+
+    rendered = run(CpmShell, drives, "TYPE B:SECOND.TXT")
+
+    assert "here" in rendered
+    assert drives.current == "A"
+
+
+def test_a_drive_prefixed_command_is_not_a_drive_change(tmp_path):
+    """Only a bare letter and colon selects. `B:FOO` names a program."""
+    drives = two_drives(tmp_path)
+
+    run(CpmShell, drives, "B:NOSUCH")
+
+    assert drives.current == "A"
