@@ -19,6 +19,7 @@ with the user simply not asking, WOPR plays exactly as it does today.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # `anthropic` is an optional dependency, so only the checker
@@ -27,6 +28,15 @@ if TYPE_CHECKING:  # `anthropic` is an optional dependency, so only the checker
 #: The model to answer as WOPR. Deliberately not configurable yet: one moving
 #: part is enough until somebody asks for a second.
 MODEL = "claude-opus-5"
+
+#: Emix's own name for a key, checked before the SDK's.
+#:
+#: ``ANTHROPIC_API_KEY`` is not Emix's variable to occupy. Other tools read it
+#: too — Claude Code among them, which will bill an API account rather than a
+#: subscription when it finds one — so telling somebody to export it globally
+#: for the sake of a joke personality breaks the thing they actually work in.
+#: This lets the key live somewhere that only Emix reads.
+KEY_VARIABLE = "EMIX_ANTHROPIC_API_KEY"
 
 #: Room to think in, not room to talk in. Claude Opus 5 thinks by default and
 #: those tokens come out of this budget, so a ceiling tight enough to enforce
@@ -106,7 +116,10 @@ def reply(said: str, exchanges: list[tuple[str, str]]) -> str:
         messages.append({"role": "assistant", "content": answered})
     messages.append({"role": "user", "content": said})
 
-    client = anthropic.Anthropic()
+    # Emix's own variable first, then whatever the SDK resolves for itself —
+    # an API key, an auth token, a stored login profile, federated identity.
+    private = os.environ.get(KEY_VARIABLE)
+    client = anthropic.Anthropic(api_key=private) if private else anthropic.Anthropic()
     response = client.messages.create(
         model=MODEL,
         max_tokens=_MAX_TOKENS,
@@ -126,9 +139,9 @@ def failure(error: Exception) -> str:
     # No credential at all raises a TypeError from the SDK's resolver rather
     # than an authentication error, because the request is never sent.
     if isinstance(error, TypeError) and "authentication" in str(error).lower():
-        return "NO CREDENTIALS. SET ANTHROPIC_API_KEY, OR RUN: ANT AUTH LOGIN."
+        return f"NO CREDENTIALS. SET {KEY_VARIABLE}."
     if isinstance(error, anthropic.AuthenticationError):
-        return "AUTHENTICATION FAILURE. SET ANTHROPIC_API_KEY, OR RUN: ANT AUTH LOGIN."
+        return f"AUTHENTICATION FAILURE. CHECK {KEY_VARIABLE}."
     if isinstance(error, anthropic.RateLimitError):
         return "CIRCUITS BUSY. TRY AGAIN SHORTLY."
     if isinstance(error, anthropic.APIConnectionError):

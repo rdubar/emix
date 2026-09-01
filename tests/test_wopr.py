@@ -514,3 +514,66 @@ def test_an_empty_or_zero_setting_asks_for_nothing(value, root, monkeypatch):
     drives = DriveSet([Drive.create("PRIMARY", root)])
 
     assert WoprShell(drives, stdin=io.StringIO(), stdout=io.StringIO()).conversing is False
+
+
+# -- whose key is it anyway ----------------------------------------------
+
+
+def test_emix_reads_its_own_key_variable_first(monkeypatch):
+    """ANTHROPIC_API_KEY is not Emix's variable to occupy.
+
+    Other tools read it — Claude Code will bill an API account rather than a
+    subscription when it finds one — so a key exported globally for the sake
+    of a joke personality breaks the thing the user actually works in.
+    """
+    import emix.converse as converse
+
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.messages = self
+
+        def create(self, **kwargs):
+            class Block:
+                type = "text"
+                text = "AFFIRMATIVE."
+
+            return type("Response", (), {"content": [Block()]})()
+
+    monkeypatch.setenv(converse.KEY_VARIABLE, "emix-only-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "the-one-claude-code-uses")
+    monkeypatch.setattr(converse, "MODEL", "claude-opus-5")
+    fake = type("Module", (), {"Anthropic": FakeClient})
+    monkeypatch.setitem(__import__("sys").modules, "anthropic", fake)
+
+    assert converse.reply("HELLO", []) == "AFFIRMATIVE."
+    assert seen == {"api_key": "emix-only-key"}
+
+
+def test_without_it_the_sdk_resolves_credentials_itself(monkeypatch):
+    """A stored login profile is a perfectly good credential; do not second-guess."""
+    import emix.converse as converse
+
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen["kwargs"] = kwargs
+            self.messages = self
+
+        def create(self, **kwargs):
+            class Block:
+                type = "text"
+                text = "AFFIRMATIVE."
+
+            return type("Response", (), {"content": [Block()]})()
+
+    monkeypatch.delenv(converse.KEY_VARIABLE, raising=False)
+    fake = type("Module", (), {"Anthropic": FakeClient})
+    monkeypatch.setitem(__import__("sys").modules, "anthropic", fake)
+
+    converse.reply("HELLO", [])
+
+    assert seen["kwargs"] == {}

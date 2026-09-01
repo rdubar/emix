@@ -301,20 +301,26 @@ WOPR can hold a conversation, if you ask it to and have somewhere to ask:
 
 ```sh
 uv tool install "emix-shell[ai]"
-export ANTHROPIC_API_KEY=sk-ant-...
+export EMIX_ANTHROPIC_API_KEY=sk-ant-...
 emix wopr
 ```
 
-The key goes in your shell profile — `~/.zshrc` on macOS, `~/.bashrc` on most
-Linux — so it is there next time:
+Put it in your shell profile — `~/.zshrc` on macOS, `~/.bashrc` on most Linux
+— so it is there next time:
 
 ```sh
-echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
+echo 'export EMIX_ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
 ```
 
 Get one from [console.anthropic.com](https://console.anthropic.com/) under API
-keys. If you use the `ant` CLI, `ant auth login` stores a profile that Emix
-picks up with no key set at all.
+keys.
+
+**Use `EMIX_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`.** The second is read
+by every Anthropic tool on the machine — including Claude Code, which will
+bill an API account rather than your subscription when it finds one set. Emix
+should not take over a variable it does not own for the sake of a joke
+personality, so it reads its own first. If you have no reason to keep them
+apart, `ANTHROPIC_API_KEY` still works, as does an `ant auth login` profile.
 
 **Do not put it in `emix.toml`.** Emix will not read it from there, on purpose:
 configuration files get copied, shared and committed, and an API key should

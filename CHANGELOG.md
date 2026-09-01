@@ -33,6 +33,13 @@
   which is most of why the games list is unsettling rather than merely long.
   `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
   only: a pipe, a script or a golden transcript gets its output at once.
+- **`$EMIX_ANTHROPIC_API_KEY`** is read before the SDK's own credential
+  resolution. `ANTHROPIC_API_KEY` is not Emix's variable to occupy: every
+  Anthropic tool on the machine reads it, and Claude Code will bill an API
+  account rather than a subscription when it finds one set. Exporting a key
+  globally for the sake of a joke personality should not break the thing you
+  actually work in. `ANTHROPIC_API_KEY` and `ant auth login` still work for
+  anyone with no reason to keep them apart.
 - **`STATUS`** in WOPR reports what is switched on, and `$EMIX_CONVERSE=1`
   turns conversation on for every session rather than each one. Conversation
   is per-session and invisible, which made "EMIX SHIPS NO GAMES" look like a
