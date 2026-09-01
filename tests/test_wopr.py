@@ -655,3 +655,56 @@ def test_a_missing_workspace_is_explained_rather_than_quoted(root, monkeypatch):
 
     assert "LINKED TO AN IDENTITY" in rendered
     assert converse.WORKSPACE_VARIABLE in rendered
+
+
+def test_the_workspace_can_live_in_the_settings_file(tmp_path, monkeypatch):
+    """An identifier, not a credential — and a file no shell reload can miss."""
+    import emix.converse as converse
+
+    settings = tmp_path / "emix.toml"
+    settings.write_text('[emix]\nworkspace = "wrkspc_01ABC"\n')
+    monkeypatch.setenv("EMIX_CONFIG", str(settings))
+    monkeypatch.delenv(converse.WORKSPACE_VARIABLE, raising=False)
+
+    assert converse.workspace_id() == "wrkspc_01ABC"
+
+
+def test_the_environment_still_wins_over_the_file(tmp_path, monkeypatch):
+    import emix.converse as converse
+
+    settings = tmp_path / "emix.toml"
+    settings.write_text('[emix]\nworkspace = "from_file"\n')
+    monkeypatch.setenv("EMIX_CONFIG", str(settings))
+    monkeypatch.setenv(converse.WORKSPACE_VARIABLE, "from_environment")
+
+    assert converse.workspace_id() == "from_environment"
+
+
+def test_a_broken_settings_file_does_not_break_the_conversation(tmp_path, monkeypatch):
+    """Whatever is wrong with it, it is not this function's problem to report."""
+    import emix.converse as converse
+
+    settings = tmp_path / "emix.toml"
+    settings.write_text("[emix\n")
+    monkeypatch.setenv("EMIX_CONFIG", str(settings))
+    monkeypatch.delenv(converse.WORKSPACE_VARIABLE, raising=False)
+
+    assert converse.workspace_id() == ""
+
+
+def test_the_workspace_error_says_exactly_where_to_click(root, monkeypatch):
+    """Naming a variable is not help if nothing says where the value comes from."""
+    import emix.converse as converse
+
+    def explode(said, exchanges):
+        raise RuntimeError("400 anthropic-workspace-id is required")
+
+    monkeypatch.setattr(converse, "reply", explode)
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "HELLO")
+
+    assert converse.WORKSPACE_HELP in rendered
+    assert "ADDRESS BAR" in rendered
+    assert "emix.toml" in rendered

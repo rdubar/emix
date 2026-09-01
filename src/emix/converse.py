@@ -38,6 +38,9 @@ MODEL = "claude-opus-5"
 #: This lets the key live somewhere that only Emix reads.
 KEY_VARIABLE = "EMIX_ANTHROPIC_API_KEY"
 
+#: Where to find a workspace id, since nothing else will tell you.
+WORKSPACE_HELP = "https://console.anthropic.com/settings/workspaces"
+
 #: Which workspace an identity-linked key is acting in.
 #:
 #: Most keys need nothing here. A key linked to an identity does: the API
@@ -109,6 +112,25 @@ def check() -> Unavailable | None:
     return None
 
 
+def workspace_id() -> str:
+    """The workspace to act in: the environment first, then the settings file.
+
+    It belongs in a settings file in a way an API key never does — it is an
+    identifier, not a credential, and it is the same every time. Putting it
+    there also spares the one trap that cost an afternoon: an exported
+    variable is invisible to every terminal window that was already open.
+    """
+    from emix.config import load
+
+    named = os.environ.get(WORKSPACE_VARIABLE)
+    if named:
+        return named
+    try:
+        return load().workspace
+    except Exception:  # a broken settings file is not this function's problem
+        return ""
+
+
 def reply(said: str, exchanges: list[tuple[str, str]]) -> str:
     """WOPR's answer to one line, given what has been said so far.
 
@@ -130,7 +152,7 @@ def reply(said: str, exchanges: list[tuple[str, str]]) -> str:
     private = os.environ.get(KEY_VARIABLE)
     if private:
         settings["api_key"] = private
-    workspace = os.environ.get(WORKSPACE_VARIABLE)
+    workspace = workspace_id()
     if workspace:
         # Sent as a header because the SDK's own workspace_id argument belongs
         # to the AWS and Vertex backends, not to a first-party key.
@@ -166,9 +188,12 @@ def failure(error: Exception) -> str:
     # guess. Saying which one, and where to set it, saves reading a 400.
     if "anthropic-workspace-id" in str(error):
         return (
-            f"THIS KEY IS LINKED TO AN IDENTITY AND MUST NAME A WORKSPACE.\n"
-            f"SET {WORKSPACE_VARIABLE} TO THE WORKSPACE ID FROM\n"
-            f"CONSOLE.ANTHROPIC.COM, OR USE A KEY THAT IS NOT IDENTITY-LINKED."
+            "THIS KEY IS LINKED TO AN IDENTITY AND MUST NAME A WORKSPACE.\n"
+            f"OPEN {WORKSPACE_HELP}\n"
+            "AND CLICK YOUR WORKSPACE. THE ID IS IN THE ADDRESS BAR, LIKE\n"
+            "wrkspc_01ABC. THEN PUT IT IN YOUR emix.toml:\n"
+            '  [emix]\n  workspace = "wrkspc_01ABC"\n'
+            f"OR EXPORT {WORKSPACE_VARIABLE}."
         )
     # Anything else says what it was. A bare "COMMUNICATION FAILURE" is in
     # character and useless: it hides the one sentence that would tell the

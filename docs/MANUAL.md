@@ -231,6 +231,8 @@ personality = "cpm"
 strict = false
 screen = "bright-green"        # main text
 hint-colour = "bright-yellow"  # Emix's own lines
+# workspace = "wrkspc_..."     # only for WOPR, and only for an
+                               # identity-linked key
 
 [drives]
 default = ["~/Documents"]
@@ -315,15 +317,19 @@ echo 'export EMIX_ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
 Get one from [console.anthropic.com](https://console.anthropic.com/) under API
 keys.
 
-If the key is **identity-linked**, it can act in more than one workspace and
-will not guess which, so it also needs:
+If your key is **identity-linked** — some accounts issue only these — it can
+act in more than one workspace and will not guess which. Open
+[the workspaces page](https://console.anthropic.com/settings/workspaces),
+click your workspace, and take the `wrkspc_...` from the address bar. It is an
+identifier rather than a secret, so it can live in your settings file:
 
-```sh
-export EMIX_ANTHROPIC_WORKSPACE_ID=...
+```toml
+[emix]
+workspace = "wrkspc_01ABC"
 ```
 
-Emix says so if you hit it. Most keys need nothing here; a key that does will
-otherwise fail with a message about `anthropic-workspace-id`.
+`EMIX_ANTHROPIC_WORKSPACE_ID` works too and wins over the file. Emix tells you
+all of this if you hit it.
 
 **Use `EMIX_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`.** The second is read
 by every Anthropic tool on the machine — including Claude Code, which will

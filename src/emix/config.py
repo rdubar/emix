@@ -56,6 +56,10 @@ class Config:
     hint_colour: str = ""
     #: The main text colour. Empty means "not chosen", as above.
     screen: str = ""
+    #: Which workspace WOPR's optional conversation acts in, for an
+    #: identity-linked key. An identifier rather than a credential, which is
+    #: why it may live in a file when the key itself may not.
+    workspace: str = ""
 
     def mounts_for(self, personality: str) -> list[Path]:
         """Configured drives for a personality, falling back to the default."""
@@ -115,6 +119,7 @@ def load(path: Path | None = None) -> Config:
         strict=strict,
         hint_colour=colour,
         screen=screen,
+        workspace=str(emix.get("workspace", "")),
     )
 
 

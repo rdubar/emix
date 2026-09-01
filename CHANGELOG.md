@@ -33,6 +33,12 @@
   which is most of why the games list is unsettling rather than merely long.
   `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
   only: a pipe, a script or a golden transcript gets its output at once.
+- **`workspace` in `emix.toml`** is an alternative to the environment
+  variable, which wins when both are set. A workspace id is an identifier
+  rather than a credential, so unlike a key it belongs in a file — and a file
+  is not invisible to terminal windows that were already open, which is the
+  trap that cost an afternoon. The error that sends you looking now names the
+  Console page, what to click, and what the answer looks like.
 - **`$EMIX_ANTHROPIC_WORKSPACE_ID`** names the workspace for an
   identity-linked key, which can act in several and will not guess. Sent as an
   `anthropic-workspace-id` header, because the SDK's own `workspace_id`
