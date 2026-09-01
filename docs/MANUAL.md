@@ -290,15 +290,35 @@ before deleting, and drives stay sealed.
 It is the only personality that cannot be historically inaccurate, which is
 also why it is the cheapest one Emix will ever have.
 
+WOPR prints one line at a time, at about the speed of the terminal it would
+have been sitting at. That pause is most of why the games list is unsettling
+rather than merely long. `SPEED FAST` turns it off, `SPEED SLOW` puts it back,
+and `SPEED 0.3` sets your own. Pipes and scripts never wait.
+
 #### Letting WOPR answer for itself
 
 WOPR can hold a conversation, if you ask it to and have somewhere to ask:
 
 ```sh
 uv tool install "emix-shell[ai]"
-export ANTHROPIC_API_KEY=...
+export ANTHROPIC_API_KEY=sk-ant-...
 emix wopr
 ```
+
+The key goes in your shell profile — `~/.zshrc` on macOS, `~/.bashrc` on most
+Linux — so it is there next time:
+
+```sh
+echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
+```
+
+Get one from [console.anthropic.com](https://console.anthropic.com/) under API
+keys. If you use the `ant` CLI, `ant auth login` stores a profile that Emix
+picks up with no key set at all.
+
+**Do not put it in `emix.toml`.** Emix will not read it from there, on purpose:
+configuration files get copied, shared and committed, and an API key should
+never be somewhere that happens to it by accident.
 
 ```text
 CONVERSE ON

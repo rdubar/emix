@@ -299,3 +299,85 @@ def test_a_missing_package_is_reported_with_what_to_install(monkeypatch):
 
     assert missing is not None
     assert "emix-shell[ai]" in missing.reason
+
+
+# -- printing speed ------------------------------------------------------
+
+
+def test_nothing_waits_where_nobody_is_watching(root):
+    """A pipe, a test and a golden transcript all get their output at once."""
+    shell = wopr(root)
+
+    assert shell.interactive is False
+    assert shell.line_delay == 0.0
+
+
+def test_an_interactive_session_prints_at_terminal_speed(root, monkeypatch):
+    from emix.personalities.wopr import LINE_DELAY
+
+    monkeypatch.setattr("emix.shell._is_a_tty", lambda stream: True)
+    drives = DriveSet([Drive.create("PRIMARY", root)])
+
+    shell = WoprShell(drives, stdout=io.StringIO())
+
+    assert shell.line_delay == LINE_DELAY
+
+
+def test_the_pause_falls_between_lines_and_not_after_the_last(root, monkeypatch):
+    """Nobody should be kept waiting for their own cursor."""
+    waits = []
+    monkeypatch.setattr("emix.personalities.wopr.time.sleep", waits.append)
+    shell = wopr(root)
+    shell.line_delay = 0.1
+
+    shell.write("ONE\nTWO\nTHREE\n")
+
+    # Three newlines, three pauses; the trailing empty piece is not waited on.
+    assert waits == [0.1, 0.1, 0.1]
+    assert shell.stdout.getvalue() == "ONE\nTWO\nTHREE\n"
+
+
+def test_a_partial_line_is_not_waited_on(root, monkeypatch):
+    waits = []
+    monkeypatch.setattr("emix.personalities.wopr.time.sleep", waits.append)
+    shell = wopr(root)
+    shell.line_delay = 0.1
+
+    shell.write("PROCEED? (Y/N) ")
+
+    assert waits == []
+
+
+@pytest.mark.parametrize("said,expected", [("FAST", 0.0), ("0", 0.0), ("0.5", 0.5)])
+def test_speed_can_be_set(said, expected, root):
+    shell = wopr(root)
+
+    run(shell, f"SPEED {said}")
+
+    assert shell.line_delay == expected
+
+
+def test_speed_slow_restores_the_default(root):
+    from emix.personalities.wopr import LINE_DELAY
+
+    shell = wopr(root)
+    shell.line_delay = 0.0
+
+    run(shell, "SPEED SLOW")
+
+    assert shell.line_delay == LINE_DELAY
+
+
+def test_speed_reports_itself_when_asked_nothing(root):
+    assert "SECONDS PER LINE" in run(wopr(root), "SPEED")
+
+
+@pytest.mark.parametrize("said", ["QUICKLY", "-1", "60"])
+def test_an_unusable_speed_is_refused(said, root):
+    """A minute between lines is not a retro effect, it is a hang."""
+    shell = wopr(root)
+
+    rendered = run(shell, f"SPEED {said}")
+
+    assert "SYNTAX ERROR" in rendered
+    assert shell.line_delay == 0.0

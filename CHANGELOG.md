@@ -29,6 +29,10 @@
   The files under it are entirely real, and every rule still applies: `PURGE`
   confirms before deleting, drives stay sealed, and `PLAY CHESS` answers that
   Emix ships no games, because it ships nothing.
+- **WOPR prints at terminal speed**, one line at a time with a pause between,
+  which is most of why the games list is unsettling rather than merely long.
+  `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
+  only: a pipe, a script or a golden transcript gets its output at once.
 - **WOPR can hold a conversation**, with `CONVERSE ON` and
   `emix-shell[ai]`. Anything it has no command for goes to a language model
   answering in character, so the games list stops being a joke and becomes

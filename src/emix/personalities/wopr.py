@@ -30,6 +30,7 @@ back out to a personality that does use one.
 
 from __future__ import annotations
 
+import time
 from typing import ClassVar
 
 from emix import converse
@@ -78,6 +79,12 @@ _THE_ONE = "GLOBAL THERMONUCLEAR WAR"
 
 #: What the backdoor was, and the only name WOPR is pleased to see.
 _FALKEN = "JOSHUA"
+
+#: Seconds between printed lines. A 1200-baud terminal took about a third of a
+#: second over a full line, and the pause is most of why the games list is
+#: frightening rather than merely long. Interactive sessions only: a pipe, a
+#: test or a golden transcript gets its output at once.
+LINE_DELAY = 0.14
 
 #: WOPR's entire filesystem, which exists only here. Nothing in this
 #: personality opens, reads, writes or deletes a host path, so this is the
@@ -135,6 +142,52 @@ class WoprShell(Shell):
         self.conversing = False
         #: What has been said, so a game can be played across several turns.
         self._exchanges: list[tuple[str, str]] = []
+        #: Seconds to wait between lines. Zero anywhere nobody is watching.
+        self.line_delay = LINE_DELAY if self.interactive else 0.0
+
+    def write(self, text: str) -> None:
+        """Print at the speed of a terminal that cost more than a car.
+
+        Line by line, because that is the unit a printing terminal delivered
+        and the unit the pause belongs between. A partial line — a prompt, a
+        confirmation question — is written whole and not waited on, since
+        nobody wants to be kept waiting for their own cursor.
+        """
+        if not self.line_delay:
+            super().write(text)
+            return
+        lines = text.split("\n")
+        for index, line in enumerate(lines):
+            last = index == len(lines) - 1
+            super().write(line if last else line + "\n")
+            if not last:
+                time.sleep(self.line_delay)
+
+    @verb("SPEED", meta=True, summary="Set the printing speed", usage="SPEED FAST|SLOW|seconds")
+    def do_speed(self, invocation: Invocation) -> None:
+        """How long to wait between lines, for people in more of a hurry.
+
+        An Emix command, not a WOPR one: a real terminal's speed was a fact
+        about the wire, not something you could ask the far end to change.
+        """
+        wanted = (invocation.args[0].upper() if invocation.args else "").strip()
+        if not wanted:
+            self.write(f"PRINTING SPEED: {self.line_delay:.2f} SECONDS PER LINE.\n")
+            return
+        if wanted == "FAST":
+            self.line_delay = 0.0
+        elif wanted == "SLOW":
+            self.line_delay = LINE_DELAY
+        else:
+            try:
+                seconds = float(wanted)
+            except ValueError:
+                raise EmixError(Code.SYNTAX, "SPEED", "expected FAST, SLOW or a number") from None
+            if not 0.0 <= seconds <= 2.0:
+                raise EmixError(Code.SYNTAX, "SPEED", "expected a delay between 0 and 2 seconds")
+            self.line_delay = seconds
+        # Written after the change, so the answer arrives at the new speed.
+        self.write(f"PRINTING SPEED: {self.line_delay:.2f} SECONDS PER LINE.\n")
 
     def banner(self) -> str:
         return (
