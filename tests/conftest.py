@@ -38,6 +38,21 @@ needs_symlinks = pytest.mark.skipif(
 )
 
 
+def toml_path(path: Path) -> str:
+    """A path as a TOML value, correct on any host.
+
+    A Windows path is full of backslashes, and TOML reads those as escapes
+    inside a double-quoted string: ``"C:\\Users\\me"`` is not a path, it is an
+    invalid ``\\U`` escape. A literal string takes the text as written.
+    """
+    return f"'{path}'"
+
+
+#: `termios` and `tty` do not exist on Windows, so a test that reaches for them
+#: is testing the POSIX probe and belongs only where that probe runs.
+needs_posix_terminal = pytest.mark.skipif(os.name == "nt", reason="termios and tty are POSIX-only")
+
+
 #: Writing a program that exits with a chosen status means writing a script,
 #: and on Windows a script is a batch file — which Emix deliberately refuses to
 #: run, because Windows would execute it through the command processor. There

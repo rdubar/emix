@@ -239,6 +239,19 @@ cpm = ["~/Documents", "~/src"]
 
 Every setting is optional. Command-line options win over this file.
 
+On Windows, **write paths in single quotes**:
+
+```toml
+[drives]
+default = ['C:\Users\me\Documents']
+```
+
+TOML reads a backslash inside *double* quotes as an escape, so `"C:\Users\me"`
+fails with a message about an invalid hex value — `\U` is the start of a
+Unicode escape. Single quotes take the path exactly as written. Doubling the
+backslashes or using forward slashes both work too. Emix says as much if you
+get it wrong.
+
 ## 5. Choose a personality
 
 The personalities share one file engine, but they teach different ways of

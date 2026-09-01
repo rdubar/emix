@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import toml_path
 from emix import config as module
 from emix.errors import EmixError
 
@@ -79,6 +80,37 @@ def test_an_unknown_colour_is_refused_with_the_choices(tmp_path):
     assert "yellow" in caught.value.detail
 
 
+def test_a_windows_path_in_double_quotes_is_explained(tmp_path):
+    """TOML says "Invalid hex value", which tells the reader nothing at all.
+
+    `\\U` starts a Unicode escape, so pasting `C:\\Users\\me` into double quotes
+    fails in a way that looks like a bug in Emix rather than a quoting rule.
+    """
+    path = write(tmp_path, '[drives]\ndefault = ["C:\\Users\\me\\Documents"]\n')
+
+    with pytest.raises(EmixError) as caught:
+        module.load(path)
+
+    assert "backslashes doubled" in caught.value.detail
+    assert "Single quotes" in caught.value.detail
+
+
+def test_ordinary_toml_mistakes_are_not_blamed_on_windows(tmp_path):
+    """The advice must only appear when it is the likely cause."""
+    path = write(tmp_path, "[emix\n")
+
+    with pytest.raises(EmixError) as caught:
+        module.load(path)
+
+    assert "backslashes" not in caught.value.detail
+
+
+def test_a_single_quoted_windows_path_is_read_as_written(tmp_path):
+    path = write(tmp_path, "[drives]\ndefault = ['C:\\Users\\me']\n")
+
+    assert module.load(path).mounts_for("cpm") == [Path("C:\\Users\\me").expanduser()]
+
+
 def test_malformed_toml_names_the_file(tmp_path):
     path = write(tmp_path, "[emix\n")
 
@@ -133,7 +165,7 @@ def test_configured_drives_are_mounted_when_none_are_given(tmp_path, monkeypatch
     drive = tmp_path / "documents"
     drive.mkdir()
     (drive / "HELLO.TXT").write_text("hi\n")
-    path = write(tmp_path, f'[drives]\ndefault = ["{drive}"]\n')
+    path = write(tmp_path, f"[drives]\ndefault = [{toml_path(drive)}]\n")
     monkeypatch.setenv(module.ENVIRONMENT, str(path))
 
     main(["cpm", "-c", "DIR"])
