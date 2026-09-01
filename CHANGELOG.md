@@ -33,6 +33,12 @@
   which is most of why the games list is unsettling rather than merely long.
   `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
   only: a pipe, a script or a golden transcript gets its output at once.
+- **`$EMIX_ANTHROPIC_WORKSPACE_ID`** names the workspace for an
+  identity-linked key, which can act in several and will not guess. Sent as an
+  `anthropic-workspace-id` header, because the SDK's own `workspace_id`
+  argument belongs to the AWS and Vertex backends rather than a first-party
+  key. Nothing is sent when none is named. The failure it fixes now explains
+  itself instead of quoting a 400.
 - **`$EMIX_ANTHROPIC_API_KEY`** is read before the SDK's own credential
   resolution. `ANTHROPIC_API_KEY` is not Emix's variable to occupy: every
   Anthropic tool on the machine reads it, and Claude Code will bill an API

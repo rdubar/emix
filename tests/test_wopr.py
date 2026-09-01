@@ -577,3 +577,81 @@ def test_without_it_the_sdk_resolves_credentials_itself(monkeypatch):
     converse.reply("HELLO", [])
 
     assert seen["kwargs"] == {}
+
+
+def test_an_identity_linked_key_can_name_its_workspace(monkeypatch):
+    """Such a key can act in several workspaces and will not guess which."""
+    import emix.converse as converse
+
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.messages = self
+
+        def create(self, **kwargs):
+            class Block:
+                type = "text"
+                text = "AFFIRMATIVE."
+
+            return type("Response", (), {"content": [Block()]})()
+
+    monkeypatch.setenv(converse.KEY_VARIABLE, "a-key")
+    monkeypatch.setenv(converse.WORKSPACE_VARIABLE, "wrkspc_01")
+    monkeypatch.setitem(
+        __import__("sys").modules, "anthropic", type("Module", (), {"Anthropic": FakeClient})
+    )
+
+    converse.reply("HELLO", [])
+
+    assert seen["default_headers"] == {"anthropic-workspace-id": "wrkspc_01"}
+
+
+def test_no_workspace_header_is_sent_when_none_is_named(monkeypatch):
+    """Most keys need none, and an empty header is not the same as no header."""
+    import emix.converse as converse
+
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.messages = self
+
+        def create(self, **kwargs):
+            class Block:
+                type = "text"
+                text = "AFFIRMATIVE."
+
+            return type("Response", (), {"content": [Block()]})()
+
+    monkeypatch.delenv(converse.WORKSPACE_VARIABLE, raising=False)
+    monkeypatch.setenv(converse.KEY_VARIABLE, "a-key")
+    monkeypatch.setitem(
+        __import__("sys").modules, "anthropic", type("Module", (), {"Anthropic": FakeClient})
+    )
+
+    converse.reply("HELLO", [])
+
+    assert "default_headers" not in seen
+
+
+def test_a_missing_workspace_is_explained_rather_than_quoted(root, monkeypatch):
+    """The raw 400 is accurate and tells nobody what to do about it."""
+    import emix.converse as converse
+
+    def explode(said, exchanges):
+        raise RuntimeError(
+            "Error code: 400 - anthropic-workspace-id is required when "
+            "authenticating with an identity-linked API key"
+        )
+
+    monkeypatch.setattr(converse, "reply", explode)
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "HELLO")
+
+    assert "LINKED TO AN IDENTITY" in rendered
+    assert converse.WORKSPACE_VARIABLE in rendered

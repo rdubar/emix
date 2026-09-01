@@ -38,6 +38,14 @@ MODEL = "claude-opus-5"
 #: This lets the key live somewhere that only Emix reads.
 KEY_VARIABLE = "EMIX_ANTHROPIC_API_KEY"
 
+#: Which workspace an identity-linked key is acting in.
+#:
+#: Most keys need nothing here. A key linked to an identity does: the API
+#: refuses it with a 400 saying `anthropic-workspace-id is required`, because
+#: such a key can act in more than one workspace and will not guess which.
+#: Named for Emix for the same reason as the key above.
+WORKSPACE_VARIABLE = "EMIX_ANTHROPIC_WORKSPACE_ID"
+
 #: Room to think in, not room to talk in. Claude Opus 5 thinks by default and
 #: those tokens come out of this budget, so a ceiling tight enough to enforce
 #: brevity starves the reasoning instead — and brevity is the system prompt's
@@ -118,8 +126,16 @@ def reply(said: str, exchanges: list[tuple[str, str]]) -> str:
 
     # Emix's own variable first, then whatever the SDK resolves for itself —
     # an API key, an auth token, a stored login profile, federated identity.
+    settings: dict[str, object] = {}
     private = os.environ.get(KEY_VARIABLE)
-    client = anthropic.Anthropic(api_key=private) if private else anthropic.Anthropic()
+    if private:
+        settings["api_key"] = private
+    workspace = os.environ.get(WORKSPACE_VARIABLE)
+    if workspace:
+        # Sent as a header because the SDK's own workspace_id argument belongs
+        # to the AWS and Vertex backends, not to a first-party key.
+        settings["default_headers"] = {"anthropic-workspace-id": workspace}
+    client = anthropic.Anthropic(**settings)  # type: ignore[arg-type]
     response = client.messages.create(
         model=MODEL,
         max_tokens=_MAX_TOKENS,
@@ -146,6 +162,14 @@ def failure(error: Exception) -> str:
         return "CIRCUITS BUSY. TRY AGAIN SHORTLY."
     if isinstance(error, anthropic.APIConnectionError):
         return "NO LINE TO THE OUTSIDE. CHECK YOUR CONNECTION."
+    # A key tied to an identity can act in several workspaces and will not
+    # guess. Saying which one, and where to set it, saves reading a 400.
+    if "anthropic-workspace-id" in str(error):
+        return (
+            f"THIS KEY IS LINKED TO AN IDENTITY AND MUST NAME A WORKSPACE.\n"
+            f"SET {WORKSPACE_VARIABLE} TO THE WORKSPACE ID FROM\n"
+            f"CONSOLE.ANTHROPIC.COM, OR USE A KEY THAT IS NOT IDENTITY-LINKED."
+        )
     # Anything else says what it was. A bare "COMMUNICATION FAILURE" is in
     # character and useless: it hides the one sentence that would tell the
     # user, or the next person to read a bug report, what actually went wrong.

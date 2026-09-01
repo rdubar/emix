@@ -315,6 +315,16 @@ echo 'export EMIX_ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
 Get one from [console.anthropic.com](https://console.anthropic.com/) under API
 keys.
 
+If the key is **identity-linked**, it can act in more than one workspace and
+will not guess which, so it also needs:
+
+```sh
+export EMIX_ANTHROPIC_WORKSPACE_ID=...
+```
+
+Emix says so if you hit it. Most keys need nothing here; a key that does will
+otherwise fail with a message about `anthropic-workspace-id`.
+
 **Use `EMIX_ANTHROPIC_API_KEY`, not `ANTHROPIC_API_KEY`.** The second is read
 by every Anthropic tool on the machine — including Claude Code, which will
 bill an API account rather than your subscription when it finds one set. Emix
