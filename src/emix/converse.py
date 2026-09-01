@@ -28,8 +28,11 @@ if TYPE_CHECKING:  # `anthropic` is an optional dependency, so only the checker
 #: part is enough until somebody asks for a second.
 MODEL = "claude-opus-5"
 
-#: A terminal, not an essay. WOPR was terse in the film and should stay terse.
-_MAX_TOKENS = 512
+#: Room to think in, not room to talk in. Claude Opus 5 thinks by default and
+#: those tokens come out of this budget, so a ceiling tight enough to enforce
+#: brevity starves the reasoning instead — and brevity is the system prompt's
+#: job anyway. WOPR still answers in a line or two.
+_MAX_TOKENS = 4096
 
 #: How many previous exchanges to carry. Enough for a game of anything; short
 #: enough that a long session does not quietly become an expensive one.
@@ -130,4 +133,7 @@ def failure(error: Exception) -> str:
         return "CIRCUITS BUSY. TRY AGAIN SHORTLY."
     if isinstance(error, anthropic.APIConnectionError):
         return "NO LINE TO THE OUTSIDE. CHECK YOUR CONNECTION."
-    return "COMMUNICATION FAILURE."
+    # Anything else says what it was. A bare "COMMUNICATION FAILURE" is in
+    # character and useless: it hides the one sentence that would tell the
+    # user, or the next person to read a bug report, what actually went wrong.
+    return f"COMMUNICATION FAILURE: {str(error).strip() or type(error).__name__}"

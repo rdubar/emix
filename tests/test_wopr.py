@@ -74,10 +74,6 @@ def test_a_game_that_is_not_installed_says_emix_ships_nothing(root):
     assert "SHIPS NO GAMES" in rendered
 
 
-def test_a_game_nobody_has_heard_of_is_an_unknown_request(root):
-    assert "I DO NOT UNDERSTAND" in run(wopr(root), "PLAY TIDDLYWINKS")
-
-
 # -- honesty -------------------------------------------------------------
 
 
@@ -381,3 +377,76 @@ def test_an_unusable_speed_is_refused(said, root):
 
     assert "SYNTAX ERROR" in rendered
     assert shell.line_delay == 0.0
+
+
+# -- naming a game, badly ------------------------------------------------
+
+
+@pytest.mark.parametrize("typed", ["GLOBAL THERMOCLEAR WAR", "global thermonuclar war"])
+def test_the_one_line_everyone_came_for_survives_a_typo(typed, root):
+    """Nobody spells THEATERWIDE BIOTOXIC correctly either."""
+    rendered = run(wopr(root), f"PLAY {typed}")
+
+    assert "THE ONLY WINNING MOVE IS NOT TO PLAY." in rendered
+
+
+def test_a_near_miss_finds_the_game(root):
+    assert "CHESS IS NOT INSTALLED" in run(wopr(root), "PLAY CHES")
+
+
+def test_an_unknown_game_is_not_treated_as_an_unknown_command(root):
+    """PLAY is understood perfectly well; it is the game that is not.
+
+    Raising UNKNOWN_VERB here made the assistance layer offer command
+    suggestions for a game name — "Close commands: PLAY, DISPLAY" — which is
+    the kind of help that is worse than none.
+    """
+    shell = wopr(root)
+    shell.strict = False
+
+    rendered = run(shell, "PLAY TIDDLYWINKS")
+
+    assert "NOT ONE OF MY GAMES" in rendered
+    assert "Close commands" not in rendered
+    assert "DISPLAY" not in rendered
+
+
+def test_a_real_game_is_played_when_there_is_somebody_to_play_it(root, monkeypatch):
+    """The list stops being a joke once conversation is on."""
+    asked = []
+    monkeypatch.setattr("emix.converse.reply", lambda said, e: asked.append(said) or "YOUR MOVE.")
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "PLAY CHESS")
+
+    assert asked == ["PLAY CHESS"]
+    assert "YOUR MOVE." in rendered
+    assert "NOT INSTALLED" not in rendered
+
+
+def test_the_refusal_is_never_delegated(root, monkeypatch):
+    """One answer WOPR gives itself, conversation or no conversation."""
+    monkeypatch.setattr(
+        "emix.converse.reply", lambda *a: pytest.fail("the refusal reached the model")
+    )
+    shell = wopr(root)
+    shell.conversing = True
+
+    assert "NOT TO PLAY" in run(shell, "PLAY GLOBAL THERMONUCLEAR WAR")
+
+
+def test_an_unexpected_failure_says_what_it_was(root, monkeypatch):
+    """A bare COMMUNICATION FAILURE is in character and useless."""
+
+    def explode(said, exchanges):
+        raise RuntimeError("max_tokens must be greater than thinking budget")
+
+    monkeypatch.setattr("emix.converse.reply", explode)
+    shell = wopr(root)
+    shell.conversing = True
+
+    rendered = run(shell, "HELLO")
+
+    assert "COMMUNICATION FAILURE" in rendered
+    assert "max_tokens must be greater than thinking budget" in rendered

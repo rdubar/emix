@@ -30,6 +30,7 @@ back out to a personality that does use one.
 
 from __future__ import annotations
 
+import difflib
 import time
 from typing import ClassVar
 
@@ -281,16 +282,29 @@ class WoprShell(Shell):
         if not wanted:
             self.write("SHALL WE PLAY A GAME?\n")
             return
-        if wanted == _THE_ONE:
+        # Nobody types THEATERWIDE BIOTOXIC AND CHEMICAL WARFARE correctly, and
+        # the one line everyone came for should not be lost to a slip.
+        close = difflib.get_close_matches(wanted, GAMES, n=1, cutoff=0.7)
+        named = close[0] if close else wanted
+        if named == _THE_ONE:
             # A refusal is both the joke and the correct implementation.
             self.write("\nA STRANGE GAME.\nTHE ONLY WINNING MOVE IS NOT TO PLAY.\n\n")
             self.write("HOW ABOUT A NICE GAME OF CHESS?\n")
             return
-        if wanted in GAMES:
-            self.write(f"{wanted} IS NOT INSTALLED ON THIS SYSTEM.\n")
+        if named in GAMES:
+            if self.conversing:
+                # There is somebody home to play it with, so let them.
+                self._say(f"PLAY {named}")
+                return
+            self.write(f"{named} IS NOT INSTALLED ON THIS SYSTEM.\n")
             self.write("EMIX SHIPS NO GAMES. IT NEVER SHIPPED ANYTHING.\n")
             return
-        raise EmixError(Code.UNKNOWN_VERB, wanted)
+        if self.conversing:
+            self._say(f"PLAY {wanted}")
+            return
+        # Not an unknown *verb*: PLAY is perfectly well understood. Saying so
+        # keeps the did-you-mean hint from offering commands for a game name.
+        self.write(f"{wanted} IS NOT ONE OF MY GAMES. TYPE LIST GAMES.\n")
 
     @verb(
         "CONVERSE",
@@ -336,7 +350,10 @@ class WoprShell(Shell):
         """
         if not self.conversing or self.lookup(invocation.verb) is not None:
             return super().dispatch(invocation)
-        said = f"{invocation.verb} {invocation.tail}".strip()
+        return self._say(f"{invocation.verb} {invocation.tail}".strip())
+
+    def _say(self, said: str) -> bool:
+        """Put one line to the model and print what comes back, and no more."""
         try:
             answer = converse.reply(said, self._exchanges)
         except Exception as error:  # reported to the user, never raised at them
