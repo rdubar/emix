@@ -14,6 +14,21 @@
 
 ### Added
 
+- **A fourth personality: `wopr`**, the war room computer from *WarGames*.
+  `LIST GAMES` gives the list, and the one that is not a game gets the answer
+  it deserves — a straight-faced refusal, which is both the joke and the
+  correct implementation.
+
+  It is a personality rather than an easter egg deliberately. An egg hidden
+  inside CP/M would put invented behaviour behind a period prompt, which is
+  what the painting rule exists to prevent; a separate prompt can be honest,
+  and this one says it is fictional in its own banner. It is also the only
+  personality that cannot be historically inaccurate, which makes it the
+  cheapest the engine will ever host.
+
+  The files under it are entirely real, and every rule still applies: `PURGE`
+  confirms before deleting, drives stay sealed, and `PLAY CHESS` answers that
+  Emix ships no games, because it ships nothing.
 - **`BECOME`** hands the session to another personality without leaving it,
   keeping the mounts. `BECOME VMS` at a CP/M prompt continues over the same
   files under DCL: the same host folder answers to `A:`, `DKA0:` and filemode

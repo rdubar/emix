@@ -80,6 +80,10 @@ Other ways to add atmosphere:
 
 ## WOPR: the fourth personality that never existed
 
+> **Built.** `emix wopr` ships as of 0.5. What follows is the reasoning that
+> got it there, kept because the argument for making it a personality rather
+> than an easter egg applies to the next invented one too.
+
 `emix wopr` — the WarGames terminal. Type what David Lightman types and get
 what he gets.
 

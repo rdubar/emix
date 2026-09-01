@@ -270,7 +270,25 @@ thinking about commands and filenames.
 | Leave | `EXIT` | `LOGOUT` | `LOGOFF` |
 
 The differences are intentional. Emix is not translating everything into
-Unix commands behind the scenes.
+Unix commands behind the scenes. `TRANSLATE` prints this table for you, from
+inside any personality.
+
+### WOPR: the one that never existed
+
+There is a fourth, and it is not a real system:
+
+```sh
+emix wopr
+```
+
+`wopr` is the war room computer from *WarGames* (1983). `LIST GAMES` gives the
+list, and the one that is not a game gets the answer it deserves. Its banner
+says it is fictional, because a prompt should be honest about what it is — but
+the files under it are your own, and every rule still holds: `PURGE` confirms
+before deleting, and drives stay sealed.
+
+It is the only personality that cannot be historically inaccurate, which is
+also why it is the cheapest one Emix will ever have.
 
 ### CP/M 2.2: short commands and drive letters
 
@@ -442,7 +460,7 @@ Useful shared commands include:
 
 - `HELP` — list commands or explain one command;
 - `EXPLAIN` — describe the previous command or error;
-- `TRANSLATE` — say the same thing in all three vocabularies;
+- `TRANSLATE` — say the same thing in every personality's vocabulary;
 - `BECOME` — continue in another personality over the same files;
 - `ABOUT` — say what Emix is and which personality is active;
 - `CREDIT` — show authorship and licence information;

@@ -23,15 +23,30 @@ already have, and Emix supplies the knowledge of how to drive it.
 
 The full guide is [docs/MANUAL.md](docs/MANUAL.md).
 
-Three personalities ship today:
+Four personalities ship today:
 
 | Personality | System | Prompt | Vocabulary |
 | --- | --- | --- | --- |
 | `cpm` | Digital Research CP/M 2.2 | `A>` | `DIR`, `ERA`, `REN`, `TYPE`, `USER`, plus `PIP` and `STAT` |
 | `vms` | DEC VAX/VMS DCL | `$ ` | `DIRECTORY`, `TYPE`, `COPY`, `RENAME`, `DELETE`, `SET`, `SHOW` |
 | `cms` | IBM VM/CMS | *(none)* | `LISTFILE`, `TYPE`, `COPYFILE`, `RENAME`, `ERASE`, `QUERY` |
+| `wopr` | *WarGames* (1983), fictional | *(none)* | `LIST`, `DISPLAY`, `DUPLICATE`, `REDESIGNATE`, `PURGE`, `GAMES` |
 
-They are not three programs. They are three vocabularies over one engine, and
+The first three are real systems. `wopr` is the war room computer from
+*WarGames*, and is the only personality that cannot be historically inaccurate
+— it says so in its own banner, because a prompt should be honest about what
+it is. It is also the only one that will refuse to play with you:
+
+```text
+PLAY GLOBAL THERMONUCLEAR WAR
+
+A STRANGE GAME.
+THE ONLY WINNING MOVE IS NOT TO PLAY.
+
+HOW ABOUT A NICE GAME OF CHESS?
+```
+
+They are not four programs. They are four vocabularies over one engine, and
 the differences between them — CP/M's `NEW=OLD` argument order, DCL's
 abbreviations and `/QUALIFIERS`, CMS's three-token `FILENAME FILETYPE
 FILEMODE` — are what the engine exists to express.
@@ -78,7 +93,7 @@ LISTFILE
 NOTES    TXT      A1
 ```
 
-One file, one directory, three vocabularies, one session. The drives come
+One file, one directory, three real vocabularies, one session. The drives come
 across renamed — the same host folder answers to `A:`, `DKA0:` and filemode
 `A` — and the drive you were on is the drive you land on.
 
