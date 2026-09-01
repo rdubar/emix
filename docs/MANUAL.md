@@ -481,29 +481,20 @@ use.
 
 ### The short way: ask an AI agent
 
-Everything in this section is public, scripted and checkable, which makes it
-the kind of chore worth handing to a coding agent if you already use one.
-Point it at the Emix repository and ask:
+Every step below is public, scripted and checkable — a good chore to hand over
+if you already use a coding agent. Ask it:
 
-> Clone https://github.com/rdubar/emix, read its AGENTS.md section "Setting
-> this up for a user who asked an agent to do it", and follow it. Verify with
-> `emix apps` and one real `emix open` session before telling me it works.
+> Clone https://github.com/rdubar/emix, follow its AGENTS.md section "Setting
+> this up for a user who asked an agent to do it", and verify with a real
+> `emix open` session before telling me it works.
 
-`AGENTS.md` carries instructions written for exactly this: which build flag
-matters and why, where the profile belongs on your operating system, and how
-to prove the result works rather than assume it. Emix still ships no emulator
-and no CP/M software — your agent builds the emulator from its own MIT-
-licensed source, and the only application involved is the freely
-distributable one already on RunCPM's sample disk.
+`AGENTS.md` holds the details it needs, including the build flag that is easy
+to miss. Read what it proposes before letting it run: it is building software
+on your machine. It sets up the emulator and its sample disk only — other
+CP/M software is yours to supply, and Emix will drive it once you write a
+profile.
 
-Two honest caveats. An agent is doing real things to your machine, so read
-what it proposes before letting it run. And this covers the emulator and its
-sample disk only — if you want WordStar or dBASE, you supply the software
-yourself, as with any other file you own. Emix will happily drive it once you
-write a profile.
-
-If you do not use an agent, or would rather see the steps, they are below and
-take about ten minutes.
+Otherwise the steps are below, and take about ten minutes.
 
 ### Build RunCPM on macOS or Linux
 
