@@ -33,6 +33,11 @@
   which is most of why the games list is unsettling rather than merely long.
   `SPEED FAST`, `SPEED SLOW` or `SPEED 0.3` change it. Interactive sessions
   only: a pipe, a script or a golden transcript gets its output at once.
+- **`STATUS`** in WOPR reports what is switched on, and `$EMIX_CONVERSE=1`
+  turns conversation on for every session rather than each one. Conversation
+  is per-session and invisible, which made "EMIX SHIPS NO GAMES" look like a
+  refusal rather than a signpost; the banner and every unplayable game now say
+  how to start talking.
 - **WOPR can hold a conversation**, with `CONVERSE ON` and
   `emix-shell[ai]`. Anything it has no command for goes to a language model
   answering in character, so the games list stops being a joke and becomes

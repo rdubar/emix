@@ -450,3 +450,67 @@ def test_an_unexpected_failure_says_what_it_was(root, monkeypatch):
 
     assert "COMMUNICATION FAILURE" in rendered
     assert "max_tokens must be greater than thinking budget" in rendered
+
+
+# -- knowing whether it is switched on -----------------------------------
+
+
+def test_the_banner_says_how_to_start_talking(root):
+    """Conversation is per-session and easy to forget between sessions."""
+    assert "CONVERSE ON" in wopr(root).banner()
+
+
+def test_the_banner_says_so_when_it_is_already_on(root):
+    shell = wopr(root)
+    shell.conversing = True
+
+    assert "CONVERSATION IS ON" in shell.banner()
+
+
+def test_a_game_you_cannot_play_says_how_to_play_it(root):
+    """A dead end is not an answer when there is a way through."""
+    rendered = run(wopr(root), "PLAY POKER")
+
+    assert "EMIX SHIPS NO GAMES" in rendered
+    assert "CONVERSE ON" in rendered
+
+
+def test_status_reports_what_is_switched_on(root):
+    rendered = run(wopr(root), "STATUS")
+
+    assert "CONVERSATION: OFF" in rendered
+    assert "IMAGINARY" in rendered
+
+
+def test_the_environment_can_ask_for_conversation_once(root, monkeypatch):
+    """Somebody who exports this has asked; they should not ask every session."""
+    monkeypatch.setenv("EMIX_CONVERSE", "1")
+    monkeypatch.setattr("emix.converse.check", lambda: None)
+    drives = DriveSet([Drive.create("PRIMARY", root)])
+
+    shell = WoprShell(drives, stdin=io.StringIO(), stdout=io.StringIO())
+
+    assert shell.conversing is True
+
+
+def test_an_unavailable_conversation_is_reported_at_the_top(root, monkeypatch):
+    """Not on the first thing they say, by which point it reads as a fault."""
+    from emix.converse import Unavailable
+
+    monkeypatch.setenv("EMIX_CONVERSE", "1")
+    monkeypatch.setattr("emix.converse.check", lambda: Unavailable("no package"))
+    drives = DriveSet([Drive.create("PRIMARY", root)])
+
+    shell = WoprShell(drives, stdin=io.StringIO(), stdout=io.StringIO())
+
+    assert shell.conversing is False
+    assert "NO PACKAGE" in shell.banner()
+
+
+@pytest.mark.parametrize("value", ["", "0"])
+def test_an_empty_or_zero_setting_asks_for_nothing(value, root, monkeypatch):
+    monkeypatch.setenv("EMIX_CONVERSE", value)
+    monkeypatch.setattr("emix.converse.check", lambda: pytest.fail("checked without being asked"))
+    drives = DriveSet([Drive.create("PRIMARY", root)])
+
+    assert WoprShell(drives, stdin=io.StringIO(), stdout=io.StringIO()).conversing is False

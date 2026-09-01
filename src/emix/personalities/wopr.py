@@ -31,6 +31,7 @@ back out to a personality that does use one.
 from __future__ import annotations
 
 import difflib
+import os
 import time
 from typing import ClassVar
 
@@ -145,6 +146,17 @@ class WoprShell(Shell):
         self._exchanges: list[tuple[str, str]] = []
         #: Seconds to wait between lines. Zero anywhere nobody is watching.
         self.line_delay = LINE_DELAY if self.interactive else 0.0
+        #: Anything the banner should say about conversation not being ready.
+        self._converse_note = ""
+        # Somebody who exports this has asked once and should not have to ask
+        # every session. Checked now so a failure is reported at the top rather
+        # than on the first thing they say.
+        if os.environ.get("EMIX_CONVERSE", "") not in {"", "0"}:
+            missing = converse.check()
+            if missing is None:
+                self.conversing = True
+            else:
+                self._converse_note = f"CONVERSATION UNAVAILABLE: {missing.reason.upper()}"
 
     def write(self, text: str) -> None:
         """Print at the speed of a terminal that cost more than a car.
@@ -197,6 +209,13 @@ class WoprShell(Shell):
             "(THIS COMPUTER IS FICTIONAL, INCLUDING ITS FILES.\n"
             " IT CANNOT SEE YOURS.)\n"
             "TYPE HELP FOR COMMANDS, OR LIST GAMES.\n"
+            + (
+                f"{self._converse_note}\n"
+                if self._converse_note
+                else "CONVERSATION IS ON. TALK TO ME.\n"
+                if self.conversing
+                else "TYPE CONVERSE ON AND I WILL ANSWER IN MY OWN WORDS.\n"
+            )
         )
 
     def prompt(self) -> str:
@@ -298,6 +317,7 @@ class WoprShell(Shell):
                 return
             self.write(f"{named} IS NOT INSTALLED ON THIS SYSTEM.\n")
             self.write("EMIX SHIPS NO GAMES. IT NEVER SHIPPED ANYTHING.\n")
+            self.write("TYPE CONVERSE ON AND I WILL PLAY IT WITH YOU MYSELF.\n")
             return
         if self.conversing:
             self._say(f"PLAY {wanted}")
@@ -305,6 +325,21 @@ class WoprShell(Shell):
         # Not an unknown *verb*: PLAY is perfectly well understood. Saying so
         # keeps the did-you-mean hint from offering commands for a game name.
         self.write(f"{wanted} IS NOT ONE OF MY GAMES. TYPE LIST GAMES.\n")
+
+    @verb("STATUS", meta=True, summary="Report what is switched on", usage="STATUS")
+    def do_status(self, invocation: Invocation) -> None:
+        """What this session is doing, since almost none of it is visible.
+
+        Conversation is off by default and per-session, which is right and is
+        also easy to forget between one `emix wopr` and the next.
+        """
+        self._require_no_arguments(invocation)
+        talking = "ON" if self.conversing else "OFF (TYPE CONVERSE ON)"
+        self.write(
+            f"CONVERSATION: {talking}\n"
+            f"PRINTING SPEED: {self.line_delay:.2f} SECONDS PER LINE\n"
+            f"FILES VISIBLE TO ME: {len(FILES)}, ALL OF THEM IMAGINARY\n"
+        )
 
     @verb(
         "CONVERSE",

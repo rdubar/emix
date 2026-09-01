@@ -327,7 +327,15 @@ I STILL CANNOT SEE YOUR FILES OR DO ANYTHING TO THIS COMPUTER.
 ```
 
 Anything WOPR has no command for then goes to a language model answering in
-character; commands still behave as commands. `CONVERSE OFF` stops it.
+character, and naming a game plays it. Commands still behave as commands.
+`CONVERSE OFF` stops it, and `STATUS` says whether it is on.
+
+**Conversation lasts one session.** To have it on every time, export the
+setting alongside your key:
+
+```sh
+echo 'export EMIX_CONVERSE=1' >> ~/.zshrc
+```
 
 **Off unless you turn it on.** It costs money and it leaves your machine, and
 neither should happen because a key happened to be in your environment.
