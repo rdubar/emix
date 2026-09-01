@@ -94,6 +94,51 @@ unzip -o ~/dev/RunCPM/DISK/A0.zip -d ~/dev/RunCPM/DISK/
 runtime. Then write `~/.config/emix/apps.toml` (see `emix apps` for a
 template) and run `emix open FILE --with te-cpm`.
 
+### Setting this up for a user who asked an agent to do it
+
+A user may point you at this repository and ask you to make `emix open` work.
+That is a reasonable thing to automate: every step below is public, scripted
+and verifiable. Do all of it, then prove it ran.
+
+**Scope.** Set up RunCPM and the software already on its sample disk. Do not
+go looking for other CP/M applications: most surviving business software is
+abandonware whose copyright is still live, and fetching binaries from archive
+sites on someone's behalf is not the same act as building an MIT-licensed
+emulator. If the user wants WordStar, they can supply it and write a profile;
+the knowledge of how to drive it belongs in `notes`, and the bytes are theirs.
+
+1. **Check the tools exist** before cloning anything: `git`, `make`, a C
+   compiler, `unzip`. On macOS these come from the Xcode Command Line Tools.
+   Say what is missing rather than half-finishing.
+2. **Clone and build**, honouring `CCP=INTERNAL` — every other CCP needs a
+   separate binary at runtime and will fail confusingly later:
+   ```sh
+   git clone https://github.com/MockbaTheBorg/RunCPM ~/dev/RunCPM
+   cd ~/dev/RunCPM/RunCPM && make macosx CCP=INTERNAL build   # posix on Linux
+   unzip -o ~/dev/RunCPM/DISK/A0.zip -d ~/dev/RunCPM/DISK
+   ```
+3. **Write the profile.** Run `emix apps` first: with nothing configured it
+   prints both the path it wants for this host and a template. Fill in the
+   real paths you just created — do not guess them, and do not assume
+   `~/.config` on Windows.
+4. **Verify, and do not report success without it.** `emix apps` lists each
+   profile and checks the emulator path and application drive. Then run a real
+   session end to end in a scratch directory:
+   ```sh
+   cd "$(mktemp -d)" && printf 'hello\n' > NOTES.TXT
+   emix open NOTES.TXT --with te-cpm
+   ```
+   `TE.COM` is the safe target: it is freely distributable, ships on the
+   sample disk, and is the one editor these docs reference. Its menu is ESC
+   then a letter — `S`ave, e`X`it.
+5. **Tell the user the quirks you have just made real for them**, because
+   nothing else will: TE's movement keys are the WordStar diamond (`^E ^S ^D
+   ^X`), its Delete deletes *forwards*, and it converts tabs to spaces on
+   read, so a round trip is lossy for tab-indented files.
+
+If a step fails, stop and say which one. A half-built emulator that produces
+`BDOS ERR` at the wrong moment is worse than an honest report.
+
 ### Backend facts worth not rediscovering
 
 - RunCPM resolves drives against **cwd** (`FILEBASE "./"`), so one binary

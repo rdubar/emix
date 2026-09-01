@@ -190,6 +190,20 @@ Open questions: whether fetching over the network belongs in a tool whose
 pitch is having no dependencies (`urllib` is standard library, so the honest
 answer is probably yes); and whether a checksum mismatch should refuse or warn.
 
+There is a cheaper half-step already shipped: `AGENTS.md` carries setup
+instructions written to be followed by a coding agent, so a user who has one
+can hand over the clone, the build, the disk unpack and the profile without
+Emix fetching, hosting or checksumming anything. It is not a substitute for a
+catalogue — an agent is not reproducible and cannot be verified the way a
+checksum can — but it removes most of the friction for the people who have the
+tool, while the written steps stay first for everyone who does not.
+
+The friction it does not remove is the profile itself: ten fields including
+two absolute paths, hand-typed. `emix apps` already prints a template and
+knows the right path for the host, so having it *write* that file — with
+discovered paths filled in — would help everyone, agent or not, and is
+probably worth more than either the catalogue or the agent route.
+
 If a real bundle is ever wanted, it belongs in a **separate repository** with a
 licence file per artifact, never in `emix-shell`.
 

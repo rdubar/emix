@@ -479,6 +479,32 @@ Real CP/M applications currently use RunCPM. Emix does not bundle RunCPM,
 CP/M, or application binaries. Install only software you have permission to
 use.
 
+### The short way: ask an AI agent
+
+Everything in this section is public, scripted and checkable, which makes it
+the kind of chore worth handing to a coding agent if you already use one.
+Point it at the Emix repository and ask:
+
+> Clone https://github.com/rdubar/emix, read its AGENTS.md section "Setting
+> this up for a user who asked an agent to do it", and follow it. Verify with
+> `emix apps` and one real `emix open` session before telling me it works.
+
+`AGENTS.md` carries instructions written for exactly this: which build flag
+matters and why, where the profile belongs on your operating system, and how
+to prove the result works rather than assume it. Emix still ships no emulator
+and no CP/M software — your agent builds the emulator from its own MIT-
+licensed source, and the only application involved is the freely
+distributable one already on RunCPM's sample disk.
+
+Two honest caveats. An agent is doing real things to your machine, so read
+what it proposes before letting it run. And this covers the emulator and its
+sample disk only — if you want WordStar or dBASE, you supply the software
+yourself, as with any other file you own. Emix will happily drive it once you
+write a profile.
+
+If you do not use an agent, or would rather see the steps, they are below and
+take about ten minutes.
+
 ### Build RunCPM on macOS or Linux
 
 You need Git, `make`, a C compiler, and `unzip`. On macOS, the Xcode Command

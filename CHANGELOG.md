@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Setting up the CP/M application bridge can be handed to a coding agent.
+  `AGENTS.md` carries instructions written to be followed rather than read —
+  which build flag matters and why, where the profile belongs on each
+  operating system, and a verification step that must pass before reporting
+  success — and the manual gives the prompt to paste. Emix still ships no
+  emulator and no software, and neither fetches any: the agent builds RunCPM
+  from its own MIT-licensed source, and the only application involved is the
+  freely distributable editor already on its sample disk. Written steps stay
+  first for anyone who does not use an agent.
+
 ## 0.4.0 — 2026-09-01
 
 The phosphor moves to the main text, and Emix runs on Windows. The second was
