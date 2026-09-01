@@ -79,6 +79,12 @@ def enable_ansi(stream: TextIO | None = None) -> bool:
     Windows an undeclared call can truncate a high-valued or redirected handle
     into a number that no later call recognises, and both console paths would
     then fail for a reason nothing reports.
+
+    The behaviour is decided by :func:`~emix.host.on_windows`, which a test can
+    answer for. The ``sys.platform`` line below decides nothing at runtime that
+    the first check has not already decided — it is there so a type checker
+    knows which branch belongs to which platform, and analyses the Win32 calls
+    only where ``ctypes.WinDLL`` exists.
     """
     if not on_windows():
         return True
@@ -89,30 +95,33 @@ def enable_ansi(stream: TextIO | None = None) -> bool:
         return True  # not a real file, so nothing to configure and nothing to break
     if descriptor != _STDOUT_FILENO:
         return True
-    try:  # pragma: no cover - exercised only on Windows
-        import ctypes
-        from ctypes import wintypes
+    if sys.platform == "win32":  # pragma: no cover - exercised only on Windows
+        try:
+            import ctypes
+            from ctypes import wintypes
 
-        kernel = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
-        kernel.GetStdHandle.argtypes = (wintypes.DWORD,)
-        kernel.GetStdHandle.restype = wintypes.HANDLE
-        kernel.GetConsoleMode.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
-        kernel.GetConsoleMode.restype = wintypes.BOOL
-        kernel.SetConsoleMode.argtypes = (wintypes.HANDLE, wintypes.DWORD)
-        kernel.SetConsoleMode.restype = wintypes.BOOL
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel.GetStdHandle.argtypes = (wintypes.DWORD,)
+            kernel.GetStdHandle.restype = wintypes.HANDLE
+            kernel.GetConsoleMode.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+            kernel.GetConsoleMode.restype = wintypes.BOOL
+            kernel.SetConsoleMode.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+            kernel.SetConsoleMode.restype = wintypes.BOOL
 
-        handle = kernel.GetStdHandle(_STD_OUTPUT_HANDLE)
-        if not handle or handle == ctypes.c_void_p(-1).value:
+            handle = kernel.GetStdHandle(_STD_OUTPUT_HANDLE)
+            if not handle or handle == ctypes.c_void_p(-1).value:
+                return False
+            mode = wintypes.DWORD()
+            if not kernel.GetConsoleMode(handle, ctypes.byref(mode)):
+                return False
+            if mode.value & _ENABLE_VIRTUAL_TERMINAL_PROCESSING:
+                return True
+            wanted = mode.value | _ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            return bool(kernel.SetConsoleMode(handle, wanted))
+        except (AttributeError, OSError, ValueError):
             return False
-        mode = wintypes.DWORD()
-        if not kernel.GetConsoleMode(handle, ctypes.byref(mode)):
-            return False
-        if mode.value & _ENABLE_VIRTUAL_TERMINAL_PROCESSING:
-            return True
-        wanted = mode.value | _ENABLE_VIRTUAL_TERMINAL_PROCESSING
-        return bool(kernel.SetConsoleMode(handle, wanted))
-    except (AttributeError, OSError, ValueError):  # pragma: no cover - as above
-        return False
+    else:
+        return True
 
 
 @dataclass(frozen=True)
@@ -154,55 +163,61 @@ def _from_osc11(stdin: TextIO, stdout: TextIO) -> Reply:
     keeps reading until the reply arrives or the deadline passes, then hands
     back everything that was not the reply. Discarding that instead would
     swallow a command typed — or pasted — during the first tenth of a second.
-    """
-    try:
-        import select
-        import termios
-        import tty
-    except ImportError:  # pragma: no cover - not a POSIX host
-        return Reply()
-    try:
-        descriptor = stdin.fileno()
-        saved = termios.tcgetattr(descriptor)
-    except (OSError, ValueError, termios.error):
-        return Reply()
-    seen = b""
-    try:
-        # TCSANOW, because tty.setraw defaults to TCSAFLUSH, which throws away
-        # anything already typed. That is the difference between a probe that
-        # costs a tenth of a second and one that eats a pasted command.
-        tty.setraw(descriptor, termios.TCSANOW)
-        stdout.write("\033]11;?\033\\")
-        stdout.flush()
-        deadline = time.monotonic() + _TIMEOUT
-        while not _REPLY.search(seen):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0 or not select.select([descriptor], [], [], remaining)[0]:
-                break
-            chunk = os.read(descriptor, 64)
-            if not chunk:
-                break
-            seen += chunk
-    except (OSError, ValueError):
-        return Reply(typed_ahead=_decode(seen))
-    finally:
-        # Leaving the terminal in raw mode would break the user's shell, so
-        # this restore must run even when everything above has failed.
-        with contextlib.suppress(OSError, ValueError, termios.error):
-            termios.tcsetattr(descriptor, termios.TCSADRAIN, saved)
 
-    reply = _REPLY.search(seen)
-    # Whatever sits either side of the reply was typed by a person, not sent
-    # by the terminal, and is theirs to get back.
-    typed_ahead = _decode(seen[: reply.start()] + seen[reply.end() :] if reply else seen)
-    found = _RGB.search(reply.group() if reply else b"")
-    if not found:
-        return Reply(typed_ahead=typed_ahead)
-    channels = []
-    for raw in found.groups():
-        text = raw.decode("ascii")
-        channels.append(int(text, 16) / (16 ** len(text) - 1))
-    return Reply(dark=_luminance(*channels) < 0.4, typed_ahead=typed_ahead)
+    POSIX only, and said in ``sys.platform`` terms so a type checker agrees:
+    ``termios`` and ``tty`` do not exist on Windows to be checked against.
+    """
+    if sys.platform == "win32":  # pragma: no cover - no termios to converse over
+        return Reply()
+    else:
+        try:
+            import select
+            import termios
+            import tty
+        except ImportError:  # pragma: no cover - not a POSIX host
+            return Reply()
+        try:
+            descriptor = stdin.fileno()
+            saved = termios.tcgetattr(descriptor)
+        except (OSError, ValueError, termios.error):
+            return Reply()
+        seen = b""
+        try:
+            # TCSANOW, because tty.setraw defaults to TCSAFLUSH, which throws away
+            # anything already typed. That is the difference between a probe that
+            # costs a tenth of a second and one that eats a pasted command.
+            tty.setraw(descriptor, termios.TCSANOW)
+            stdout.write("\033]11;?\033\\")
+            stdout.flush()
+            deadline = time.monotonic() + _TIMEOUT
+            while not _REPLY.search(seen):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not select.select([descriptor], [], [], remaining)[0]:
+                    break
+                chunk = os.read(descriptor, 64)
+                if not chunk:
+                    break
+                seen += chunk
+        except (OSError, ValueError):
+            return Reply(typed_ahead=_decode(seen))
+        finally:
+            # Leaving the terminal in raw mode would break the user's shell, so
+            # this restore must run even when everything above has failed.
+            with contextlib.suppress(OSError, ValueError, termios.error):
+                termios.tcsetattr(descriptor, termios.TCSADRAIN, saved)
+
+        reply = _REPLY.search(seen)
+        # Whatever sits either side of the reply was typed by a person, not sent
+        # by the terminal, and is theirs to get back.
+        typed_ahead = _decode(seen[: reply.start()] + seen[reply.end() :] if reply else seen)
+        found = _RGB.search(reply.group() if reply else b"")
+        if not found:
+            return Reply(typed_ahead=typed_ahead)
+        channels = []
+        for raw in found.groups():
+            text = raw.decode("ascii")
+            channels.append(int(text, 16) / (16 ** len(text) - 1))
+        return Reply(dark=_luminance(*channels) < 0.4, typed_ahead=typed_ahead)
 
 
 def _decode(raw: bytes) -> str:

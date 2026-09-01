@@ -12,12 +12,14 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Sequence
 import contextlib
 from dataclasses import dataclass, field
+import importlib
 import io
 import os
 from pathlib import Path
 import re
 import shlex
 import sys
+from types import ModuleType
 from typing import ClassVar, TextIO
 
 from emix import __version__
@@ -357,18 +359,17 @@ class Shell:
         """
         if not prefix:
             return input(prompt)
-        try:
-            import readline
-        except ImportError:  # pragma: no cover - readline is absent on some hosts
+        editor = _readline()
+        if editor is None:  # pragma: no cover - readline is absent on some hosts
             # No editor to seed. Show what was captured so it does not vanish
             # silently, then let them type it rather than typing it for them.
             self.write(f"{prompt}{prefix}\n")
             return input(prompt)
-        readline.set_startup_hook(lambda: readline.insert_text(prefix))
+        editor.set_startup_hook(lambda: editor.insert_text(prefix))
         try:
             return input(prompt)
         finally:
-            readline.set_startup_hook()
+            editor.set_startup_hook()
 
     def execute(self, line: str) -> bool:
         """Dispatch one line, converting expected failures into house style.
@@ -836,9 +837,10 @@ class Shell:
 
     def _completer(self, text: str, state: int) -> str | None:
         try:
-            import readline
-
-            matches = self.completions(text, readline.get_line_buffer())
+            editor = _readline()
+            if editor is None:  # pragma: no cover - readline is absent on some hosts
+                return None
+            matches = self.completions(text, editor.get_line_buffer())
         except Exception:  # pragma: no cover - completion must never crash input
             return None
         return matches[state] if state < len(matches) else None
@@ -846,39 +848,50 @@ class Shell:
     def _enable_completion(self) -> None:
         if not self.interactive:
             return
-        try:
-            import readline
-        except ImportError:  # pragma: no cover - readline is absent on some hosts
+        editor = _readline()
+        if editor is None:  # pragma: no cover - readline is absent on some hosts
             return
-        readline.set_completer(self._completer)
-        readline.set_completer_delims(" \t\n=;")
+        editor.set_completer(self._completer)
+        editor.set_completer_delims(" \t\n=;")
         # libedit ships on macOS and spells its binding differently.
-        binding = "bind ^I rl_complete" if "libedit" in readline.__doc__ else "tab: complete"
-        readline.parse_and_bind(binding)
+        binding = "bind ^I rl_complete" if "libedit" in (editor.__doc__ or "") else "tab: complete"
+        editor.parse_and_bind(binding)
 
     # -- readline history ------------------------------------------------
 
     def _enable_history(self) -> None:
         if not self.interactive or self.history_path is None:
             return
-        try:
-            import readline
-        except ImportError:  # pragma: no cover - readline is absent on some hosts
+        editor = _readline()
+        if editor is None:  # pragma: no cover - readline is absent on some hosts
             return
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
         with contextlib.suppress(OSError, ValueError):
-            readline.read_history_file(self.history_path)
-        readline.set_history_length(2000)
+            editor.read_history_file(self.history_path)
+        editor.set_history_length(2000)
 
     def _save_history(self) -> None:
         if not self.interactive or self.history_path is None:
             return
-        try:
-            import readline
+        editor = _readline()
+        if editor is None:  # pragma: no cover - readline is absent on some hosts
+            return
+        with contextlib.suppress(OSError):
+            editor.write_history_file(self.history_path)
 
-            readline.write_history_file(self.history_path)
-        except (ImportError, OSError):  # pragma: no cover
-            pass
+
+def _readline() -> ModuleType | None:
+    """The ``readline`` module, or ``None`` where this host has none.
+
+    Asked at runtime rather than decided by platform, because both answers are
+    possible on Windows: none ships with it, and ``pyreadline3`` supplies one.
+    Imported through :mod:`importlib` so a type checker sees the optional
+    module it is, instead of a POSIX-only one that could never exist here.
+    """
+    try:
+        return importlib.import_module("readline")
+    except ImportError:  # pragma: no cover - readline is absent on some hosts
+        return None
 
 
 def _split_words(line: str) -> list[str]:

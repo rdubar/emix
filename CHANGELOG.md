@@ -28,6 +28,15 @@
 - Issue templates, including one for historical inaccuracies, which are the
   most valuable reports Emix can get.
 
+### Changed (internal)
+
+- `readline` is reached through `importlib` and treated as the optional module
+  it genuinely is — absent on Windows, present there if `pyreadline3` is
+  installed — rather than a POSIX-only one. Platform-specific code is guarded
+  by `sys.platform` in `if`/`else` form, so a type checker analyses each branch
+  on the platform it belongs to. `mypy --platform win32` now passes as well as
+  the native run, and both are worth running before a push.
+
 ### Changed
 
 - Green phosphor now colours the **main text**, not the hints. On a terminal
