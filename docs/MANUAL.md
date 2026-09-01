@@ -1,8 +1,8 @@
 # The Emix manual
 
-Emix lets you try older computer systems like CP/M, VAX/VMS DCL, and VM/CMS on your own computer and your own files. 
-
-You dont need to use disk images or move your files into a virtual machine.
+Emix lets you try older computer systems — CP/M, VAX/VMS DCL, and VM/CMS — on
+your own computer and your own files. You don't need disk images, and you
+don't move your files into a virtual machine.
 
 Emix runs on **macOS, Linux and Windows** with Python 3.11 or newer. On a
 Raspberry Pi it runs on the Pi's own console as happily as over SSH.
@@ -229,8 +229,8 @@ Windows. `EMIX_CONFIG` overrides it anywhere:
 [emix]
 personality = "cpm"
 strict = false
-hint-colour = "yellow"
-screen = "green"
+screen = "bright-green"        # main text
+hint-colour = "bright-yellow"  # Emix's own lines
 
 [drives]
 default = ["~/Documents"]

@@ -153,8 +153,10 @@ EXAMPLE = (
     "[emix]\n"
     'personality = "cpm"\n'
     "strict = false\n"
-    'hint-colour = "yellow"     # or cyan, green, magenta, blue, red, grey, none\n'
-    'screen = "green"           # main text; the default is green on a dark terminal\n'
+    'screen = "bright-green"        # main text; "none" for your terminal\'s own colour\n'
+    'hint-colour = "bright-yellow"  # Emix\'s own lines, never the same as the screen\n'
+    "# Any of: yellow cyan green magenta blue red grey white, each with a\n"
+    "# bright- twin, or none.\n"
     "\n"
     "[drives]\n"
     '# Mounted in order. "default" applies to any personality without its own.\n'

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "emix-shell"
 dynamic = ["version"]
-description = "Historical computer personalities — CP/M, VMS, VM/CMS — over a modern Unix host"
+description = "Historical computer personalities — CP/M, VMS, VM/CMS — over your own files"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
