@@ -82,6 +82,9 @@ class VmsShell(Shell):
         Concept.WHERE: "SHOW DEFAULT",
         Concept.CHDIR: "SET DEFAULT",
     }
+    absences: ClassVar[dict[Concept, str]] = {
+        Concept.CLEAR: "DCL had no clear-screen command; the terminal's own escape did it",
+    }
 
     def banner(self) -> str:
         return (

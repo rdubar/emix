@@ -4,6 +4,21 @@
 
 ### Added
 
+- **`TRANSLATE`** says one thing in all three vocabularies at once —
+  `TRANSLATE COPY` answers `PIP NEW=OLD`, `COPY` and `COPYFILE` together.
+  Ask in whichever vocabulary you have: a modern habit (`cp`), a concept
+  (`COPY`), or any of the three systems' own verbs (`PIP`, `COPYFILE`).
+
+  Emix has always been three vocabularies over one engine, and until now no
+  command showed more than one of them, so the shared engine was implied
+  rather than visible. Nothing new had to be learned to build it: every
+  personality already declared its word for every concept, because that is
+  what the assistance layer translates from.
+
+  Where a system has no way to say something, it says so and explains why —
+  CP/M 2.2 had no directories at all, so it cannot change to one. A gap is a
+  fact about the machine, and often a better one than any of its verbs.
+
 - Setting up the CP/M application bridge can be handed to a coding agent.
   `AGENTS.md` carries instructions written to be followed rather than read —
   which build flag matters and why, where the profile belongs on each

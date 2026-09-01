@@ -257,6 +257,65 @@ def test_hints_keep_their_own_case_even_where_the_system_shouts(root):
     assert any(line != line.upper() for line in hints)
 
 
+# -- TRANSLATE: the one place the shared engine is visible ---------------
+
+
+@pytest.mark.parametrize("key", sorted(SHELLS))
+def test_translate_answers_in_all_three_vocabularies(key, root):
+    """One engine, three systems — and this is the only view that shows it."""
+    rendered = run(shell_for(key, root), "TRANSLATE COPY").upper()
+
+    assert "PIP NEW=OLD" in rendered
+    assert "COPYFILE" in rendered
+    # DCL's COPY, which is also the concept's own name, so check the row.
+    assert "OPENVMS" in rendered
+
+
+def test_a_gap_is_reported_rather_than_skipped(root):
+    """A system with no word for something is the most interesting answer."""
+    rendered = run(shell_for("cpm", root), "TRANSLATE CHDIR").upper()
+
+    assert "NO EQUIVALENT" in rendered
+    assert "HAD NO DIRECTORIES" in rendered
+    # The systems that can say it still say it.
+    assert "SET DEFAULT" in rendered
+
+
+@pytest.mark.parametrize("typed", ["cp", "COPY", "PIP", "COPYFILE", "pIp"])
+def test_translate_accepts_any_vocabulary_you_ask_in(typed, root):
+    """A modern habit, a concept, or any of the three systems' own verbs."""
+    rendered = run(shell_for("cms", root), f"TRANSLATE {typed}").upper()
+
+    assert "PIP NEW=OLD" in rendered
+    assert "COPYFILE" in rendered
+
+
+def test_translate_with_no_argument_shows_everything(root):
+    rendered = run(shell_for("cpm", root), "TRANSLATE").upper()
+
+    assert "LIST THE FILES" in rendered
+    assert "CHANGE DIRECTORY" in rendered
+    assert "LISTFILE" in rendered
+
+
+def test_a_word_nobody_knows_fails_in_house_style(root):
+    rendered = run(shell_for("cpm", root), "TRANSLATE FLUGELHORN")
+
+    assert "FLUGELHORN?" in rendered.upper()
+
+
+def test_translate_fits_eighty_columns(root):
+    """Every personality here drew on an 80-column screen."""
+    rendered = run(shell_for("vms", root), "TRANSLATE")
+
+    assert all(len(line) <= 80 for line in rendered.splitlines())
+
+
+def test_translate_is_painted_as_an_emix_addition(root):
+    """No period system could translate between systems, so it is Emix's voice."""
+    assert "\033[33m" in painted("cpm", root, "TRANSLATE COPY")
+
+
 # -- painting Emix's own commands ---------------------------------------
 
 

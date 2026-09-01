@@ -36,6 +36,29 @@ the differences between them — CP/M's `NEW=OLD` argument order, DCL's
 abbreviations and `/QUALIFIERS`, CMS's three-token `FILENAME FILETYPE
 FILEMODE` — are what the engine exists to express.
 
+`TRANSLATE` is where that becomes visible, because it answers in all three at
+once:
+
+```text
+A>TRANSLATE COPY
+TO COPY A FILE:
+  CP/M 2.2  PIP NEW=OLD
+  OPENVMS   COPY
+  VM/CMS    COPYFILE
+
+A>TRANSLATE CD
+TO CHANGE DIRECTORY:
+  CP/M 2.2  -- NO EQUIVALENT
+            CP/M 2.2 HAD NO DIRECTORIES AT ALL, ONLY DRIVES A: TO P:
+  OPENVMS   SET DEFAULT
+  VM/CMS    -- NO EQUIVALENT
+            CMS REACHED OTHER DISKS BY FILEMODE LETTER RATHER THAN BY MOVING
+```
+
+A gap is reported rather than skipped. What a system *cannot* say is usually
+the more interesting fact about it, and it is the one a table of equivalents
+would quietly hide.
+
 ## Install
 
 ```sh

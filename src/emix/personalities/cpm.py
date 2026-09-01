@@ -67,8 +67,10 @@ class CpmShell(Shell):
         Concept.QUIT: "EXIT",
         Concept.CLEAR: "CLS",
         Concept.WHERE: "DRIVES",
-        # CP/M 2.2 had no directories at all. Saying so teaches more than a
-        # substitute would.
+    }
+    absences: ClassVar[dict[Concept, str]] = {
+        # Saying so teaches more than a substitute would.
+        Concept.CHDIR: "CP/M 2.2 had no directories at all, only drives A: to P:",
     }
 
     def banner(self) -> str:

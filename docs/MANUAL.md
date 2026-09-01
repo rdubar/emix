@@ -431,6 +431,7 @@ Useful shared commands include:
 
 - `HELP` — list commands or explain one command;
 - `EXPLAIN` — describe the previous command or error;
+- `TRANSLATE` — say the same thing in all three vocabularies;
 - `ABOUT` — say what Emix is and which personality is active;
 - `CREDIT` — show authorship and licence information;
 - `APPS` — list applications available to the current personality; and
@@ -438,6 +439,39 @@ Useful shared commands include:
 
 CP/M did not originally have `HELP`; VMS did. Emix marks its additions so the
 difference remains visible.
+
+### Comparing the three systems
+
+`TRANSLATE` answers in every vocabulary at once, which is the quickest way to
+see what the personalities actually are:
+
+```text
+A>TRANSLATE COPY
+TO COPY A FILE:
+  CP/M 2.2  PIP NEW=OLD
+  OPENVMS   COPY
+  VM/CMS    COPYFILE
+```
+
+Ask in whichever vocabulary you have. `TRANSLATE cp`, `TRANSLATE COPY` and
+`TRANSLATE COPYFILE` are the same question, because a command about
+vocabulary should not be fussy about which one you asked in. `TRANSLATE` on
+its own prints everything.
+
+Where a system had no way to say something, it says so and explains why:
+
+```text
+A>TRANSLATE CD
+TO CHANGE DIRECTORY:
+  CP/M 2.2  -- NO EQUIVALENT
+            CP/M 2.2 HAD NO DIRECTORIES AT ALL, ONLY DRIVES A: TO P:
+  OPENVMS   SET DEFAULT
+  VM/CMS    -- NO EQUIVALENT
+            CMS REACHED OTHER DISKS BY FILEMODE LETTER RATHER THAN BY MOVING
+```
+
+That gap is the point. A table of equivalents would quietly hide it, and what
+a system cannot express is usually more revealing than what it can.
 
 ### Strict mode, colour, and scripts
 

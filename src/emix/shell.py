@@ -26,6 +26,7 @@ from emix import __version__
 from emix.assist import (
     Concept,
     colourise,
+    concept_for,
     default_hint,
     default_screen,
     did_you_mean,
@@ -171,6 +172,9 @@ class Shell:
     #: What this personality wants to add to an explanation of each error
     #: code, beyond :data:`~emix.assist.GENERAL`.
     explanations: ClassVar[dict[str, str]] = {}
+    #: Why this system has no way to express a concept. A gap is a fact about
+    #: the machine, and often a more interesting one than any of its verbs.
+    absences: ClassVar[dict[Concept, str]] = {}
     #: Marker on every assisted line. It must not resemble a period
     #: diagnostic, or the assistance starts lying about history.
     hint_marker = "Emix: "
@@ -599,6 +603,76 @@ class Shell:
             captured = buffer.getvalue()
             if captured:
                 self.write(self.paint(captured))
+
+    @verb(
+        "TRANSLATE",
+        meta=True,
+        summary="Show how each system says the same thing",
+        usage="TRANSLATE [command]",
+        aliases=("XLATE",),
+    )
+    def do_translate(self, invocation: Invocation) -> None:
+        """Say one thing in all three vocabularies at once.
+
+        The engine already holds every personality's word for every concept —
+        that is what makes one engine serve three systems. This is the only
+        command that shows more than one of them at a time, which makes it the
+        one place the shared engine becomes visible instead of implied.
+
+        Where a system has no way to say it, that is reported rather than
+        skipped. CP/M cannot change directory because CP/M 2.2 had no
+        directories, and knowing that is worth more than any substitute.
+        """
+        from emix.personalities import PERSONALITIES
+
+        wanted = " ".join(invocation.args) or invocation.tail.strip()
+        concepts = list(Concept)
+        if wanted:
+            found = self._concept_for_anything(wanted, PERSONALITIES)
+            if found is None:
+                raise EmixError(Code.UNKNOWN_VERB, wanted)
+            concepts = [found]
+
+        systems = [(klass.title, klass) for klass in PERSONALITIES.values()]
+        width = max(len(title) for title, _ in systems) + 2
+        lines: list[str] = []
+        for concept in concepts:
+            lines.append(f"To {concept.value}:")
+            for title, klass in systems:
+                spoken = klass.translations.get(concept)
+                if spoken is not None:
+                    lines.append(f"  {title.ljust(width)}{spoken}")
+                    continue
+                lines.append(f"  {title.ljust(width)}-- no equivalent")
+                # The reason goes on its own line: it is a sentence, not a
+                # command, and these screens are 80 columns wide.
+                reason = klass.absences.get(concept)
+                if reason:
+                    lines.append(f"  {' ' * width}{reason}")
+            lines.append("")
+        self.write(self.house_case("\n".join(lines)))
+
+    @staticmethod
+    def _concept_for_anything(wanted: str, personalities: dict[str, type[Shell]]) -> Concept | None:
+        """Resolve a concept from whatever the user happened to type.
+
+        A modern habit (``cp``), a concept's own name (``COPY``), or any of the
+        three systems' verbs (``PIP``, ``COPYFILE``) — all of them name the
+        same idea, and a command about vocabulary should not be fussy about
+        which vocabulary you asked in.
+        """
+        modern = concept_for(wanted)
+        if modern is not None:
+            return modern
+        folded = wanted.strip().upper()
+        for concept in Concept:
+            if concept.name == folded:
+                return concept
+        for klass in personalities.values():
+            for concept, spoken in klass.translations.items():
+                if spoken.split()[0].upper() == folded:
+                    return concept
+        return None
 
     @verb("EXPLAIN", meta=True, summary="Explain the last command or error", usage="EXPLAIN")
     def do_explain(self, invocation: Invocation) -> None:

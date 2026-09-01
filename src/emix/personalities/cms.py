@@ -63,6 +63,10 @@ class CmsShell(Shell):
         Concept.QUIT: "LOGOFF",
         Concept.WHERE: "QUERY DISK",
     }
+    absences: ClassVar[dict[Concept, str]] = {
+        Concept.CLEAR: "the 3270 painted whole screens; there was nothing to clear",
+        Concept.CHDIR: "CMS reached other disks by filemode letter rather than by moving",
+    }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
