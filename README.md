@@ -61,8 +61,8 @@ the differences between them — CP/M's `NEW=OLD` argument order, DCL's
 abbreviations and `/QUALIFIERS`, CMS's three-token `FILENAME FILETYPE
 FILEMODE` — are what the engine exists to express.
 
-`TRANSLATE` is where that becomes visible, because it answers in all three at
-once:
+`TRANSLATE` is where that becomes visible, because it answers in every
+personality at once:
 
 ```text
 A>TRANSLATE COPY
@@ -70,6 +70,7 @@ TO COPY A FILE:
   CP/M 2.2  PIP NEW=OLD
   OPENVMS   COPY
   VM/CMS    COPYFILE
+  WOPR      DUPLICATE NEW OLD
 
 A>TRANSLATE CD
 TO CHANGE DIRECTORY:
@@ -78,6 +79,8 @@ TO CHANGE DIRECTORY:
   OPENVMS   SET DEFAULT
   VM/CMS    -- NO EQUIVALENT
             CMS REACHED OTHER DISKS BY FILEMODE LETTER RATHER THAN BY MOVING
+  WOPR      -- NO EQUIVALENT
+            WOPR NEVER EXISTED, SO IT NEVER NEEDED ANYWHERE TO GO
 ```
 
 A gap is reported rather than skipped. What a system *cannot* say is usually
@@ -235,7 +238,7 @@ a file you cannot then type is worse than a misaligned column, so a long name
 is shown as a reversible alias — `pyproject.toml` lists as `PYPROJ_1 TOM`, and
 `TYPE PYPROJ_1.TOM` reads it back without ever renaming the host file. `ABOUT` and
 `CREDIT` are shared Emix commands in every personality, as are `APPS`,
-`EXPLAIN` and `STRICT`. `HELP`, `CLS`, `VER`,
+`EXPLAIN`, `TRANSLATE`, `BECOME`, `SETUP` and `STRICT`. `HELP`, `CLS`, `VER`,
 `UNIX` and `DRIVES` are further Emix conveniences and are labelled as such in
 `HELP`. File versions display as `;1` but only one copy is stored.
 

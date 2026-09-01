@@ -38,6 +38,14 @@ drive A:, the core file commands, safe host execution.
 **0.3 — real applications, and assistance that teaches.** Done. See the
 changelog; 0.4 adds Windows and moves the phosphor to the main text.
 
+**0.5 — the engine becomes visible.** Unreleased, on `main`. `TRANSLATE` says
+one thing in every vocabulary at once and `BECOME` hands a session between
+personalities over the same files, so "four vocabularies over one engine"
+stopped being a claim in the README and became something you can watch. WOPR
+arrived alongside them, with an optional conversation mode; `SETUP` reports
+what is configured; and CP/M finally accepts `B:` at the prompt, which is one
+of the first things anyone who used it will try.
+
 - [x] Shared drive layer (`host.py`): containment enforced *after* symlink
       resolution, case-insensitive lookup, loud failure on case ambiguity
 - [x] Shared REPL and verb table (`shell.py`), replacing `cmd.Cmd`, which
@@ -49,7 +57,7 @@ changelog; 0.4 adds Windows and moves the phosphor to the main text.
       shown as the transient programs they were
 - [x] VAX/VMS DCL personality: abbreviation, qualifiers, `DELETE` version rule
 - [x] IBM VM/CMS personality: three-token fileids, `Ready;` responses
-- [x] `uv`-based workflow, ruff, strict mypy, CI on macOS and Linux
+- [x] `uv`-based workflow, ruff, strict mypy, CI on macOS, Linux and Windows
 - [x] Persistent readline history per personality
 
 ## Assistance, and the line it must not cross
@@ -90,6 +98,11 @@ learning the vocabulary.
 - [x] Tab completion that offers names in the personality's own casing
 
 ## The next personality
+
+WOPR arrived first and from nowhere on this list, because it cost almost
+nothing: a personality measured against a film rather than a machine cannot be
+caught being wrong about one. The candidates below are the expensive kind, and
+are still the interesting ones.
 
 Candidates, in order of preference:
 

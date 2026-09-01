@@ -259,7 +259,7 @@ get it wrong.
 The personalities share one file engine, but they teach different ways of
 thinking about commands and filenames.
 
-### The same job in three command languages
+### The same job in three historical command languages
 
 | Job | CP/M | VMS DCL | VM/CMS |
 | --- | --- | --- | --- |
@@ -288,6 +288,9 @@ list, and the one that is not a game gets the answer it deserves. Its banner
 says it is fictional, because a prompt should be honest about what it is — but
 the files under it are your own, and every rule still holds: `PURGE` confirms
 before deleting, and drives stay sealed.
+
+`LOGON JOSHUA` gets the greeting the film's backdoor got; anybody else is not
+recognised.
 
 It is the only personality that cannot be historically inaccurate, which is
 also why it is the cheapest one Emix will ever have.
@@ -561,13 +564,14 @@ Useful shared commands include:
 - `BECOME` — continue in another personality over the same files;
 - `ABOUT` — say what Emix is and which personality is active;
 - `CREDIT` — show authorship and licence information;
-- `APPS` — list applications available to the current personality; and
+- `APPS` — list applications available to the current personality;
+- `SETUP` — say what is configured and what is missing; and
 - `STRICT ON` — turn off all Emix-added assistance.
 
 CP/M did not originally have `HELP`; VMS did. Emix marks its additions so the
 difference remains visible.
 
-### Comparing the three systems
+### Comparing the personalities
 
 `TRANSLATE` answers in every vocabulary at once, which is the quickest way to
 see what the personalities actually are:
@@ -578,6 +582,17 @@ TO COPY A FILE:
   CP/M 2.2  PIP NEW=OLD
   OPENVMS   COPY
   VM/CMS    COPYFILE
+  WOPR      DUPLICATE NEW OLD
+
+A>TRANSLATE CD
+TO CHANGE DIRECTORY:
+  CP/M 2.2  -- NO EQUIVALENT
+            CP/M 2.2 HAD NO DIRECTORIES AT ALL, ONLY DRIVES A: TO P:
+  OPENVMS   SET DEFAULT
+  VM/CMS    -- NO EQUIVALENT
+            CMS REACHED OTHER DISKS BY FILEMODE LETTER RATHER THAN BY MOVING
+  WOPR      -- NO EQUIVALENT
+            WOPR NEVER EXISTED, SO IT NEVER NEEDED ANYWHERE TO GO
 ```
 
 Ask in whichever vocabulary you have. `TRANSLATE cp`, `TRANSLATE COPY` and
@@ -614,9 +629,9 @@ $ DIRECTORY
 same host folder answers to `A:` under CP/M, `DKA0:` under VMS and filemode
 `A` under CMS — and the drive you were on is the drive you land on.
 
-The default directory does not come across, deliberately: the three systems
+The default directory does not come across, deliberately: the personalities
 disagree about whether directories exist at all, and CP/M 2.2 has none. The
-one thing that means the same in all three is which mount you are looking at.
+one thing that means the same everywhere is which mount you are looking at.
 
 A personality with fewer drive names than you have mounts will refuse rather
 than drop one. VMS has four; CP/M has sixteen.
