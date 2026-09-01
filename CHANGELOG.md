@@ -4,6 +4,18 @@
 
 ### Added
 
+- **`BECOME`** hands the session to another personality without leaving it,
+  keeping the mounts. `BECOME VMS` at a CP/M prompt continues over the same
+  files under DCL: the same host folder answers to `A:`, `DKA0:` and filemode
+  `A` in turn, and the drive you were on is the drive you land on. A system
+  with fewer drive names than you have mounts refuses rather than drop one.
+
+  The default directory does not carry over, deliberately — the three systems
+  disagree about whether directories exist, and CP/M 2.2 has none, so the only
+  thing that means the same in all three is which mount you are on.
+
+  Three vocabularies over one engine was always the design; until now, seeing
+  the second one meant quitting.
 - **`TRANSLATE`** says one thing in all three vocabularies at once —
   `TRANSLATE COPY` answers `PIP NEW=OLD`, `COPY` and `COPYFILE` together.
   Ask in whichever vocabulary you have: a modern habit (`cp`), a concept

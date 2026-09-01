@@ -210,6 +210,8 @@ class Shell:
         # us not to do.
         #: Keystrokes the terminal probe read before the prompt existed.
         self.typed_ahead = ""
+        #: The personality this session is handing over to, once it stops.
+        self.becoming: str | None = None
         if (
             os.environ.get("NO_COLOR") is not None
             or not _is_a_tty(self.stdout)
@@ -603,6 +605,47 @@ class Shell:
             captured = buffer.getvalue()
             if captured:
                 self.write(self.paint(captured))
+
+    @verb(
+        "BECOME",
+        meta=True,
+        summary="Continue in another personality, same files",
+        usage="BECOME [SYSTEM]",
+    )
+    def do_become(self, invocation: Invocation) -> Outcome | None:
+        """Hand this session to another personality, keeping the mounts.
+
+        Three vocabularies over one engine is the whole design, and until now
+        seeing the second one meant quitting. The drives come across renamed —
+        the same host directory answers to ``A:``, ``DKA0:`` and filemode
+        ``A`` — so the files under you do not move when the language does.
+
+        No period system could turn into another one, which is why this is an
+        Emix command and says so.
+        """
+        from emix.personalities import PERSONALITIES
+
+        wanted = (invocation.args[0] if invocation.args else "").lower()
+        if not wanted:
+            self.write(
+                self.house_case(
+                    "Personalities: "
+                    + ", ".join(
+                        f"{key} ({klass.title})" for key, klass in sorted(PERSONALITIES.items())
+                    )
+                    + f"\nThis one is {self.key}. BECOME <name> changes it, keeping your files.\n"
+                )
+            )
+            return None
+        if wanted not in PERSONALITIES:
+            raise EmixError(Code.UNKNOWN_VERB, wanted)
+        if wanted == self.key:
+            self.write(self.house_case(f"Already {self.title}.\n"))
+            return None
+        # A script may do this too: unlike a strictness default, a line saying
+        # BECOME VMS is entirely readable from the script alone.
+        self.becoming = wanted
+        return Outcome(stop=True)
 
     @verb(
         "TRANSLATE",

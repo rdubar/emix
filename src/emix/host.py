@@ -16,7 +16,7 @@ Three rules hold for every path this module hands back:
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 import fnmatch
 import os
@@ -79,6 +79,32 @@ class DriveSet:
 
     def mount(self, drive: Drive) -> None:
         self._drives[drive.name] = drive
+
+    def renamed(self, names: Sequence[str]) -> DriveSet:
+        """The same host directories under another system's drive names.
+
+        One engine serving three personalities means these mounts have to be
+        able to answer to ``A:``, ``DKA0:`` and filemode ``A`` in turn. What
+        carries over is *position*: the second mount stays the second mount,
+        and the drive you were on stays the drive you are on.
+
+        The default directory does not carry over, deliberately. The three
+        systems disagree about whether directories exist at all — CP/M 2.2 has
+        none — so the only thing that means the same in all of them is which
+        mount you are looking at.
+        """
+        existing = list(self._drives.values())
+        if len(existing) > len(names):
+            raise EmixError(
+                Code.NO_DRIVE,
+                existing[len(names)].name,
+                f"that system has only {len(names)} drive names",
+            )
+        fresh = [
+            Drive(new.upper(), drive.root, drive.label)
+            for new, drive in zip(names, existing, strict=False)
+        ]
+        return DriveSet(fresh, current=fresh[list(self._drives).index(self._current)].name)
 
     def select(self, name: str) -> None:
         """Make ``name`` the current drive, resetting its default directory."""

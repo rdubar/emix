@@ -153,3 +153,49 @@ def test_case_collisions_is_empty_when_nothing_clashes(tmp_path):
     from emix.host import case_collisions
 
     assert case_collisions([tmp_path / "a.txt", tmp_path / "b.txt"]) == set()
+
+
+# -- the same mounts under another system's names -----------------------
+
+
+def test_renaming_keeps_the_roots_in_order(drive_root, tmp_path):
+    second = tmp_path / "second"
+    second.mkdir()
+    drives = DriveSet([Drive.create("A", drive_root), Drive.create("B", second)])
+
+    renamed = drives.renamed(("DKA0", "DKA100", "DKA200"))
+
+    assert renamed.names == ["DKA0", "DKA100"]
+    assert renamed.drive("DKA0").root == drives.drive("A").root
+    assert renamed.drive("DKA100").root == drives.drive("B").root
+
+
+def test_renaming_keeps_you_on_the_drive_you_were_on(drive_root, tmp_path):
+    """Position is the one thing that means the same in all three systems."""
+    second = tmp_path / "second"
+    second.mkdir()
+    drives = DriveSet([Drive.create("A", drive_root), Drive.create("B", second)])
+    drives.select("B")
+
+    assert drives.renamed(("DKA0", "DKA100")).current == "DKA100"
+
+
+def test_renaming_refuses_when_the_new_system_has_too_few_drives(drive_root, tmp_path):
+    """CP/M has sixteen drive names and VMS has four; that is a real limit."""
+    extra = tmp_path / "extra"
+    extra.mkdir()
+    drives = DriveSet([Drive.create("A", drive_root), Drive.create("B", extra)])
+
+    with pytest.raises(EmixError) as caught:
+        drives.renamed(("DKA0",))
+
+    assert caught.value.code is Code.NO_DRIVE
+
+
+def test_renaming_leaves_the_original_alone(drive_root):
+    drives = DriveSet([Drive.create("A", drive_root)])
+
+    drives.renamed(("DKA0",))
+
+    assert drives.names == ["A"]
+    assert drives.current == "A"

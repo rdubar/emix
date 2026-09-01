@@ -107,3 +107,102 @@ def test_one_shot_mode_writes_no_history_file(tmp_path, monkeypatch):
     main(["cpm", "-m", str(tmp_path), "-c", "VER"])
 
     assert not state.exists()
+
+
+# -- BECOME: the same files under another vocabulary --------------------
+
+
+def test_becoming_another_personality_keeps_the_files(tmp_path, capsys):
+    """The point of one engine: the language changes, the files do not."""
+    (tmp_path / "NOTES.TXT").write_text("hello\n")
+
+    main(["cpm", "-m", str(tmp_path), "-c", "DIR", "-c", "BECOME VMS", "-c", "DIRECTORY"])
+    rendered = capsys.readouterr().out
+
+    assert "NOTES    TXT" in rendered  # CP/M said it this way
+    assert "NOTES.TXT;1" in rendered  # and DCL says it that way
+    assert "DKA0:" in rendered  # under DCL's drive names
+
+
+def test_the_drive_you_were_on_is_the_drive_you_land_on(tmp_path, capsys):
+    """Position carries over, because that is what means the same in all three."""
+    first, second = tmp_path / "one", tmp_path / "two"
+    for folder in (first, second):
+        folder.mkdir()
+    (second / "SECOND.TXT").write_text("here\n")
+
+    main(
+        [
+            "vms",
+            "-m",
+            str(first),
+            "-m",
+            str(second),
+            "-c",
+            "SET DEFAULT DKA100:",
+            "-c",
+            "BECOME CPM",
+            "-c",
+            "DIR",
+        ]
+    )
+    rendered = capsys.readouterr().out
+
+    # DKA100: was the second mount, so B: is where CP/M should be looking.
+    assert "B: SECOND   TXT" in rendered
+
+
+def test_becoming_can_be_done_twice(tmp_path, capsys):
+    (tmp_path / "NOTES.TXT").write_text("hello\n")
+
+    code = main(
+        [
+            "cpm",
+            "-m",
+            str(tmp_path),
+            "-c",
+            "BECOME VMS",
+            "-c",
+            "BECOME CMS",
+            "-c",
+            "LISTFILE",
+        ]
+    )
+
+    assert code == 0
+    assert "NOTES    TXT" in capsys.readouterr().out
+
+
+def test_becoming_nothing_in_particular_lists_the_choices(tmp_path, capsys):
+    main(["cpm", "-m", str(tmp_path), "-c", "BECOME"])
+    rendered = capsys.readouterr().out.upper()
+
+    assert "CPM" in rendered and "VMS" in rendered and "CMS" in rendered
+
+
+def test_becoming_something_that_is_not_a_personality_fails(tmp_path, capsys):
+    code = main(["cpm", "-m", str(tmp_path), "-c", "BECOME ATARI"])
+
+    assert code != 0
+    assert "ATARI?" in capsys.readouterr().out.upper()
+
+
+def test_becoming_what_you_already_are_says_so(tmp_path, capsys):
+    code = main(["cpm", "-m", str(tmp_path), "-c", "BECOME CPM", "-c", "DIR"])
+
+    assert code == 0
+    assert "ALREADY" in capsys.readouterr().out.upper()
+
+
+def test_more_mounts_than_the_new_system_has_drives_is_refused(tmp_path, capsys):
+    """VMS ships four drive names; CP/M ships sixteen."""
+    mounts = []
+    for index in range(5):
+        folder = tmp_path / f"d{index}"
+        folder.mkdir()
+        mounts += ["-m", str(folder)]
+
+    code = main(["cpm", *mounts, "-c", "BECOME VMS"])
+
+    assert code != 0
+    assert "?" in capsys.readouterr().out or code == 1

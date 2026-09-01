@@ -432,6 +432,7 @@ Useful shared commands include:
 - `HELP` — list commands or explain one command;
 - `EXPLAIN` — describe the previous command or error;
 - `TRANSLATE` — say the same thing in all three vocabularies;
+- `BECOME` — continue in another personality over the same files;
 - `ABOUT` — say what Emix is and which personality is active;
 - `CREDIT` — show authorship and licence information;
 - `APPS` — list applications available to the current personality; and
@@ -472,6 +473,27 @@ TO CHANGE DIRECTORY:
 
 That gap is the point. A table of equivalents would quietly hide it, and what
 a system cannot express is usually more revealing than what it can.
+
+### Changing personality without leaving
+
+`BECOME` hands the session to another personality and keeps your files where
+they are:
+
+```text
+A>BECOME VMS
+$ DIRECTORY
+```
+
+`BECOME` on its own lists the choices. Your mounts come across renamed — the
+same host folder answers to `A:` under CP/M, `DKA0:` under VMS and filemode
+`A` under CMS — and the drive you were on is the drive you land on.
+
+The default directory does not come across, deliberately: the three systems
+disagree about whether directories exist at all, and CP/M 2.2 has none. The
+one thing that means the same in all three is which mount you are looking at.
+
+A personality with fewer drive names than you have mounts will refuse rather
+than drop one. VMS has four; CP/M has sixteen.
 
 ### Strict mode, colour, and scripts
 

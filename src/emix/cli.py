@@ -12,10 +12,11 @@ from emix import update as emix_update
 from emix.apps import profiles as app_profiles
 from emix.apps.runner import describe_profiles, open_document
 from emix.assist import COLOURS
+from emix.config import Config
 from emix.errors import EmixError
 from emix.host import Drive, DriveSet
 from emix.personalities import DRIVE_NAMES, PERSONALITIES, get
-from emix.shell import default_history_path
+from emix.shell import Shell, default_history_path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -201,17 +202,51 @@ def main(argv: list[str] | None = None) -> int:
     if args.command:
         # A script must be able to tell that something failed. An interactive
         # session carries on; a one-shot invocation reports.
+        remaining = list(args.command)
         ok = True
-        with shell.session():
-            for line in args.command:
-                ok = shell.execute(line) and ok
-        return 0 if ok else 1
+        while True:
+            with shell.session():
+                while remaining:
+                    ok = shell.execute(remaining.pop(0)) and ok
+                    if shell.becoming is not None:
+                        break
+            if shell.becoming is None:
+                return 0 if ok else 1
+            try:
+                shell = _hand_over(shell, args, settings)
+            except EmixError as error:
+                shell.becoming = None
+                shell.write(shell.render_error(error))
+                return 1
 
-    try:
-        return shell.run()
-    except KeyboardInterrupt:
-        shell.write("\n")
-        return 130
+    # BECOME stops the loop and names its successor, so a session is a
+    # sequence of personalities over one set of mounts rather than one shell.
+    while True:
+        try:
+            code = shell.run()
+        except KeyboardInterrupt:
+            shell.write("\n")
+            return 130
+        if shell.becoming is None:
+            return code
+        try:
+            shell = _hand_over(shell, args, settings)
+        except EmixError as error:
+            shell.becoming = None
+            shell.write(shell.render_error(error))
+
+
+def _hand_over(shell: Shell, args: argparse.Namespace, settings: Config) -> Shell:
+    """Build the personality this one is handing to, over the same drives."""
+    key = shell.becoming or shell.key
+    factory = get(key)
+    return factory(
+        shell.drives.renamed(DRIVE_NAMES[key]),
+        history=None if args.no_history else default_history_path(key),
+        strict=shell.strict,
+        hint_colour=shell.hint_colour,
+        screen=shell.screen_colour,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

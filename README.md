@@ -59,6 +59,29 @@ A gap is reported rather than skipped. What a system *cannot* say is usually
 the more interesting fact about it, and it is the one a table of equivalents
 would quietly hide.
 
+`BECOME` goes further and hands the session over, keeping your files exactly
+where they are:
+
+```text
+A>DIR
+A: NOTES    TXT
+
+A>BECOME VMS
+$ DIRECTORY
+Directory DKA0:[000000]
+
+NOTES.TXT;1
+
+$ BECOME CMS
+Ready;
+LISTFILE
+NOTES    TXT      A1
+```
+
+One file, one directory, three vocabularies, one session. The drives come
+across renamed — the same host folder answers to `A:`, `DKA0:` and filemode
+`A` — and the drive you were on is the drive you land on.
+
 ## Install
 
 ```sh
