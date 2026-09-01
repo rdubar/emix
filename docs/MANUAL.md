@@ -338,9 +338,24 @@ should not take over a variable it does not own for the sake of a joke
 personality, so it reads its own first. If you have no reason to keep them
 apart, `ANTHROPIC_API_KEY` still works, as does an `ant auth login` profile.
 
+**Your key never leaves your computer.** There is no Emix server and no
+account. The key goes from your own environment, through Anthropic's SDK, to
+Anthropic — the same path any local tool takes. Nobody involved in Emix sees
+it, and Emix stores it nowhere.
+
 **Do not put it in `emix.toml`.** Emix will not read it from there, on purpose:
 configuration files get copied, shared and committed, and an API key should
 never be somewhere that happens to it by accident.
+
+`emix --setup` says what is configured and what is missing, without changing
+anything and without printing the key itself:
+
+```text
+Conversation (WOPR only, and optional)
+  package    installed
+  key        set in EMIX_ANTHROPIC_API_KEY
+  workspace  not set — only an identity-linked key needs one
+```
 
 ```text
 CONVERSE ON

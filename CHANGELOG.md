@@ -14,6 +14,12 @@
 
 ### Added
 
+- **`SETUP`, and `emix --setup`**, reporting what is configured and what is
+  missing — where the settings and application files are, whether each is
+  present, and every piece WOPR's optional conversation needs. It reads: it
+  never writes, prompts, or stores, and a key is reported as present or absent
+  and never printed. Answers "is this going to work?" before somebody finds
+  out one failure at a time.
 - **A fourth personality: `wopr`**, the war room computer from *WarGames*.
   `LIST GAMES` gives the list, and the one that is not a game gets the answer
   it deserves — a straight-faced refusal, which is both the joke and the

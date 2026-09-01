@@ -46,10 +46,15 @@ THE ONLY WINNING MOVE IS NOT TO PLAY.
 HOW ABOUT A NICE GAME OF CHESS?
 ```
 
+`emix --setup` reports what is configured and what is missing, and changes
+nothing.
+
 WOPR is also the one place a language model is welcome. `CONVERSE ON`, with
 `emix-shell[ai]` installed, lets it answer in its own words and play the games
 on its list — off unless you ask, and unable to touch anything either way,
 because WOPR has no files to reach and neither does anything answering as it.
+There is no Emix server and no account: your key goes from your own
+environment straight to Anthropic, as it would from any local tool.
 
 They are not four programs. They are four vocabularies over one engine, and
 the differences between them — CP/M's `NEW=OLD` argument order, DCL's

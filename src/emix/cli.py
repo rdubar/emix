@@ -91,6 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="report what is configured and what is missing, and change nothing",
+    )
+    parser.add_argument(
         "--update",
         action="store_true",
         help="show how this copy was installed and offer to update it",
@@ -166,6 +171,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.update:
         return emix_update.update()
+
+    if args.setup:
+        # Answered before a personality starts, because the point is to find
+        # out whether one will work. Any of them can say it; CP/M is nearest.
+        shell = get("cpm")(DriveSet([Drive.create("A", Path.cwd())]), history=None)
+        shell.execute("SETUP")
+        return 0
 
     try:
         settings = emix_config.load()

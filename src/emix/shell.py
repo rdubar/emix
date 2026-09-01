@@ -606,6 +606,59 @@ class Shell:
             if captured:
                 self.write(self.paint(captured))
 
+    @verb("SETUP", meta=True, summary="Check what is configured and what is not", usage="SETUP")
+    def do_setup(self, invocation: Invocation) -> None:
+        """Say what is set up and what is missing, and change nothing.
+
+        Answers "is this going to work?" before somebody spends an afternoon
+        finding out one failure at a time. It reads; it never writes, never
+        prompts, and never stores anything — least of all a credential, which
+        it reports only as present or absent and never prints.
+
+        Not folded into house case: these are host paths and URLs, and a
+        personality that upper-cases everything would print ones that do not
+        exist.
+        """
+        self._require_no_arguments(invocation)
+        from emix.apps.profiles import config_path as apps_path
+        from emix.config import config_path
+        from emix.update import detect
+
+        where = detect()
+        lines = [f"Emix {__version__} — {where.method.value}", f"  {where.location}", ""]
+        for label, path, absent in (
+            ("Settings", config_path(), "optional; Emix works with none"),
+            ("Applications", apps_path(), "run 'emix apps' for a template"),
+        ):
+            state = "found" if path.is_file() else f"not present — {absent}"
+            lines += [label, f"  {path}", f"  {state}", ""]
+        lines += ["Conversation (WOPR only, and optional)", *self._conversation_report()]
+        self.write("\n".join(lines) + "\n")
+
+    @staticmethod
+    def _conversation_report() -> list[str]:
+        """Each thing WOPR's optional conversation needs, and whether it is there."""
+        from emix import converse
+
+        missing = converse.check()
+        if missing is not None:
+            return [f"  package    no — {missing.reason}"]
+        lines = ["  package    installed"]
+        # Presence only. The value is a credential and is never printed.
+        set_here = os.environ.get(converse.KEY_VARIABLE)
+        lines.append(
+            f"  key        set in {converse.KEY_VARIABLE}"
+            if set_here
+            else f"  key        not in {converse.KEY_VARIABLE}; the SDK will look for its own"
+        )
+        workspace = converse.workspace_id()
+        lines.append(
+            f"  workspace  {workspace}"
+            if workspace
+            else "  workspace  not set — only an identity-linked key needs one"
+        )
+        return lines
+
     @verb(
         "BECOME",
         meta=True,

@@ -206,3 +206,53 @@ def test_more_mounts_than_the_new_system_has_drives_is_refused(tmp_path, capsys)
 
     assert code != 0
     assert "?" in capsys.readouterr().out or code == 1
+
+
+# -- SETUP: what is configured, and what is missing ----------------------
+
+
+def test_setup_reports_without_changing_anything(tmp_path, capsys, monkeypatch):
+    """It reads. It never writes, prompts, or stores."""
+    monkeypatch.setenv("EMIX_CONFIG", str(tmp_path / "none.toml"))
+    monkeypatch.setenv("EMIX_APPS", str(tmp_path / "none-either.toml"))
+
+    assert main(["--setup"]) == 0
+    rendered = capsys.readouterr().out
+
+    assert "Emix" in rendered
+    assert "Settings" in rendered
+    assert "not present" in rendered
+    assert not list(tmp_path.iterdir())
+
+
+def test_setup_never_prints_a_key(tmp_path, capsys, monkeypatch):
+    """Presence is the answer. The value is a credential."""
+    from emix import converse
+
+    monkeypatch.setenv(converse.KEY_VARIABLE, "sk-ant-secret-value-here")
+    monkeypatch.setenv("EMIX_CONFIG", str(tmp_path / "none.toml"))
+
+    main(["--setup"])
+    rendered = capsys.readouterr().out
+
+    assert "sk-ant-secret-value-here" not in rendered
+    assert converse.KEY_VARIABLE in rendered
+
+
+def test_setup_says_when_no_key_is_named(tmp_path, capsys, monkeypatch):
+    from emix import converse
+
+    monkeypatch.delenv(converse.KEY_VARIABLE, raising=False)
+    monkeypatch.setenv("EMIX_CONFIG", str(tmp_path / "none.toml"))
+
+    main(["--setup"])
+
+    assert "the SDK will look for its own" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("key", ["cpm", "vms", "cms", "wopr"])
+def test_every_personality_can_answer_setup(key, tmp_path, capsys):
+    """A shared question deserves a shared answer, in all four."""
+    main([key, "-m", str(tmp_path), "-c", "SETUP"])
+
+    assert "Emix" in capsys.readouterr().out
