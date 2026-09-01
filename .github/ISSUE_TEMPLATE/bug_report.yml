@@ -1,0 +1,44 @@
+name: Bug report
+description: Something Emix did that it should not have
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Emix. The three fields below are the ones that
+        usually decide whether a bug can be reproduced at all.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The first line of `emix --update`, which also says how it was installed.
+      placeholder: "Emix 0.3.0, installed via uv tool"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and terminal
+      description: Windows support is new — please say which console you are using.
+      placeholder: "macOS 15.2, iTerm2 / Raspberry Pi OS, framebuffer console / Windows 11, Windows Terminal"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you typed, and what happened
+      description: The exact line, and the output. Paste it rather than describing it.
+      placeholder: |
+        $ emix cpm
+        A>DIR *.TXT
+        ...
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: If this is about historical accuracy, a source or a manual page is very welcome.
+    validations:
+      required: true

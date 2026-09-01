@@ -24,6 +24,7 @@ class Code(Enum):
     SYNTAX = "malformed command"
     UNKNOWN_VERB = "unrecognised command"
     AMBIGUOUS_VERB = "ambiguous abbreviation"
+    NEEDS_SHELL = "running it would require a shell"
 
 
 class EmixError(Exception):

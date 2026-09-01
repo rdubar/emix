@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ideas and suggestions
+    url: https://github.com/rdubar/emix/blob/main/docs/IDEAS.md
+    about: The playful notebook. Check whether your idea is already in here, then open a blank issue.

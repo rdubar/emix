@@ -80,6 +80,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="colour for Emix hints (default: yellow; also $EMIX_HINT_COLOUR, $NO_COLOR)",
     )
     parser.add_argument(
+        "--screen",
+        choices=sorted(COLOURS),
+        default=None,
+        metavar="COLOUR",
+        help=(
+            "colour for the main text (default: green on a dark terminal, "
+            "none elsewhere; also $EMIX_SCREEN, $NO_COLOR)"
+        ),
+    )
+    parser.add_argument(
         "--update",
         action="store_true",
         help="show how this copy was installed and offer to update it",
@@ -185,14 +195,16 @@ def main(argv: list[str] | None = None) -> int:
         history=history,
         strict=args.strict if args.strict is not None else settings.strict,
         hint_colour=args.hint_colour or settings.hint_colour,
+        screen=args.screen or settings.screen,
     )
 
     if args.command:
         # A script must be able to tell that something failed. An interactive
         # session carries on; a one-shot invocation reports.
         ok = True
-        for line in args.command:
-            ok = shell.execute(line) and ok
+        with shell.session():
+            for line in args.command:
+                ok = shell.execute(line) and ok
         return 0 if ok else 1
 
     try:

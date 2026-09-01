@@ -54,6 +54,21 @@ def test_a_single_path_may_be_written_without_a_list(tmp_path):
     assert module.load(path).mounts_for("cpm") == [Path("/opt")]
 
 
+def test_the_screen_colour_is_read(tmp_path):
+    path = write(tmp_path, '[emix]\nscreen = "green"\n')
+
+    assert module.load(path).screen == "green"
+
+
+def test_an_unknown_screen_colour_is_refused_by_its_own_name(tmp_path):
+    path = write(tmp_path, '[emix]\nscreen = "chartreuse"\n')
+
+    with pytest.raises(EmixError) as caught:
+        module.load(path)
+
+    assert "screen" in caught.value.detail
+
+
 def test_an_unknown_colour_is_refused_with_the_choices(tmp_path):
     path = write(tmp_path, '[emix]\nhint-colour = "chartreuse"\n')
 

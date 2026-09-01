@@ -15,10 +15,17 @@ import sys
 
 import pytest
 
+from conftest import failing_program, needs_written_programs, write_program
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def emix(*arguments: str, apps: Path | None = None, cwd: Path) -> subprocess.CompletedProcess[str]:
+def emix(
+    *arguments: str,
+    apps: Path | None = None,
+    cwd: Path,
+    programs: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     environment = {
         **os.environ,
         "PYTHONPATH": str(ROOT / "src"),
@@ -26,10 +33,15 @@ def emix(*arguments: str, apps: Path | None = None, cwd: Path) -> subprocess.Com
         "EMIX_CONFIG": str(cwd / "no-such-config.toml"),
         # A real process is outside the reach of the conftest fixture, and the
         # failing-application test deliberately leaves its workspace behind.
+        # Every spelling, because Windows does not read TMPDIR.
         "TMPDIR": str(cwd),
+        "TEMP": str(cwd),
+        "TMP": str(cwd),
     }
     if apps is not None:
         environment["EMIX_APPS"] = str(apps)
+    if programs is not None:
+        environment["PATH"] = str(programs) + os.pathsep + environment.get("PATH", "")
     return subprocess.run(  # noqa: S603 - fixed argv, no shell, test-local
         [sys.executable, "-m", "emix", *arguments],
         capture_output=True,
@@ -37,6 +49,21 @@ def emix(*arguments: str, apps: Path | None = None, cwd: Path) -> subprocess.Com
         cwd=cwd,
         env=environment,
     )
+
+
+@pytest.fixture
+def programs(tmp_path):
+    """A directory holding a program that succeeds and one that fails.
+
+    Named rather than borrowed from the host, so the same test runs where
+    `/usr/bin/true` does not exist. Reaching them by bare name also exercises
+    the host's own program lookup, which on Windows means PATHEXT.
+    """
+    folder = tmp_path / "bin"
+    folder.mkdir()
+    write_program(folder, "yep", 0)
+    write_program(folder, "nope", 1)
+    return folder
 
 
 @pytest.fixture
@@ -57,15 +84,22 @@ def test_a_missing_file_exits_non_zero(drive):
     assert emix("cpm", "--mount", str(drive), "-c", "TYPE NOPE.TXT", cwd=drive).returncode != 0
 
 
-def test_a_failing_host_command_exits_non_zero(drive):
+@needs_written_programs
+def test_a_failing_host_command_exits_non_zero(drive, programs):
     """I3: host fallthrough discarded the status it was handed."""
-    assert emix("cpm", "--mount", str(drive), "-c", "false", cwd=drive).returncode != 0
+    result = emix("cpm", "--mount", str(drive), "-c", "nope", cwd=drive, programs=programs)
+
+    assert result.returncode != 0, result.stdout
 
 
-def test_a_successful_host_command_exits_zero(drive):
-    assert emix("cpm", "--mount", str(drive), "-c", "true", cwd=drive).returncode == 0
+@needs_written_programs
+def test_a_successful_host_command_exits_zero(drive, programs):
+    result = emix("cpm", "--mount", str(drive), "-c", "yep", cwd=drive, programs=programs)
+
+    assert result.returncode == 0, result.stdout
 
 
+@needs_written_programs
 def test_a_failing_application_exits_non_zero(drive, tmp_path):
     """I3: the inner session reported failure; the process did not."""
     apps = tmp_path / "apps.toml"
@@ -74,7 +108,7 @@ def test_a_failing_application_exits_non_zero(drive, tmp_path):
         'backend = "runcpm"\n'
         'program = "X.COM"\n'
         f'application = "{drive}"\n'
-        'executable = "/usr/bin/false"\n'
+        f'executable = "{failing_program(tmp_path).as_posix()}"\n'
         'command = "FAIL"\n'
     )
     result = emix("cpm", "--mount", str(drive), "-c", "FAIL", apps=apps, cwd=drive)

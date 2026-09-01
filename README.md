@@ -64,6 +64,12 @@ Emix has no runtime dependencies beyond Python 3.11 or newer. If `uv` warns
 that `~/.local/bin` is not on your `PATH`, run `uv tool update-shell` and open
 a new terminal.
 
+**macOS, Linux and Windows**, all three covered by CI, plus the Raspberry Pi's
+own console. Two things are Unix-only: tab completion and command history need
+`readline`, which Windows does not ship (install `pyreadline3` to get them
+back), and the RunCPM application bridge is not yet documented for Windows.
+WSL gives you the Linux experience unchanged if either matters.
+
 ### From source
 
 Running from a checkout needs no install step at all:
@@ -193,10 +199,23 @@ personality decides: CP/M's `HELP` is painted because CP/M had none, while
 VMS's stays plain because VMS had one.
 
 Emix asks the terminal what colour it is — `COLORFGBG` first, then an OSC 11
-query — and answers in **green phosphor on a dark screen, amber on a light
-one**. A terminal that will not say gets amber, which is legible on either.
-`--hint-colour cyan` (or `$EMIX_HINT_COLOUR`) picks another; `$NO_COLOR` and any non-terminal output disable it, because escape
-codes in a pipe are corruption rather than decoration.
+query — and lights the whole session in **green phosphor on a dark screen**,
+with hints in **amber** against it.
+A light screen, or one that will not say, is left alone: green on white is
+merely hard to read. The phosphor is set once and inherited, not wrapped
+around every line, because output meant to read as the machine's own should
+not be full of escape sequences.
+
+Both ends of that are the **bright** ANSI colours, not the dim ones: many
+colour schemes render ANSI green as a muddy yellow-green, which is neither
+convincing as phosphor nor far enough from amber to read as a different
+voice. Hints turn the phosphor back on behind them, so a hint interrupts the
+screen rather than ending it.
+
+`--screen cyan` (or `$EMIX_SCREEN`) picks another main colour, `--hint-colour
+bright-white` (or `$EMIX_HINT_COLOUR`) another for the hints, and `none` turns
+either off. `$NO_COLOR` and any non-terminal output disable both, because
+escape codes in a pipe are corruption rather than decoration.
 
 `STRICT ON`, or `--strict`, removes all of it. Scripts and pipes are strict by
 default, because a script must not depend on a guess. Tab completion stays on
@@ -254,10 +273,11 @@ class handles parsing, dispatch, confirmation, history and errors.
 
 ## Status
 
-Emix is an early experiment. Version 0.2 is on PyPI and is useful for real
-file browsing today, on macOS and on a Raspberry Pi 5 — the case-sensitive
-filesystem there is the interesting case, and it caught a bug that macOS
-structurally could not.
+Emix is an early experiment. Version 0.3 is on PyPI and is useful for real
+file browsing today — on macOS, on Windows, and on a Raspberry Pi 5, where the
+case-sensitive filesystem is the interesting case and caught a bug that macOS
+structurally could not. Running real CP/M applications over your own documents
+works, and needs an emulator you build yourself.
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md). The
 [roadmap](docs/ROADMAP.md) covers where it goes next, including whether Emix

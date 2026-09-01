@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import ANY_EXECUTABLE, needs_symlinks
 from emix.apps.backends import (
     Disposition,
     FakeBackend,
@@ -327,7 +328,7 @@ def test_the_session_ends_when_the_application_exits(tmp_path):
         app="t", backend="runcpm", home=tmp_path, layout=user_area_layout
     )
 
-    RunCPMBackend(Path("/bin/echo")).prepare(
+    RunCPMBackend(ANY_EXECUTABLE).prepare(
         session, application, Launch(program="TE.COM", arguments=("NOTES.TXT",))
     )
 
@@ -345,7 +346,7 @@ def test_stay_leaves_the_user_at_the_guest_prompt(tmp_path):
         app="t", backend="runcpm", home=tmp_path, layout=user_area_layout
     )
 
-    RunCPMBackend(Path("/bin/echo")).prepare(
+    RunCPMBackend(ANY_EXECUTABLE).prepare(
         session,
         application,
         Launch(program="TE.COM", arguments=("NOTES.TXT",), exit_after=False),
@@ -362,7 +363,7 @@ def test_an_application_drive_without_exit_still_works(tmp_path):
         app="t", backend="runcpm", home=tmp_path, layout=user_area_layout
     )
 
-    RunCPMBackend(Path("/bin/echo")).prepare(
+    RunCPMBackend(ANY_EXECUTABLE).prepare(
         session, application, Launch(program="TE.COM", arguments=("NOTES.TXT",))
     )
 
@@ -436,6 +437,7 @@ def test_an_application_verb_opens_a_file_from_the_current_drive(installed, home
     assert document.read_text() == "edited in the app\n"
 
 
+@needs_symlinks
 def test_an_application_cannot_reach_outside_the_drive(installed, home, tmp_path):
     """Application arguments go through DriveSet, like every other verb."""
     secret = tmp_path / "secret.txt"
@@ -754,7 +756,7 @@ def test_the_com_extension_is_stripped_from_the_launch_command(tmp_path):
         app="t", backend="runcpm", home=tmp_path, layout=user_area_layout
     )
 
-    RunCPMBackend(Path("/bin/echo")).prepare(
+    RunCPMBackend(ANY_EXECUTABLE).prepare(
         session, application, Launch(program="MBASIC.COM", arguments=())
     )
 

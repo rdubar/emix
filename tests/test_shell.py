@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -137,7 +138,12 @@ def test_host_commands_receive_argv_and_never_a_shell(drives):
         shell.execute('python3 -c "print(42)"')
 
     argv, kwargs = run.call_args
-    assert argv[0] == ["python3", "-c", "print(42)"]
+    program, *arguments = argv[0]
+    # The arguments are the security-relevant half and must be exact. The
+    # program itself may arrive resolved to a full path, because Windows has
+    # to look it up before it can be run at all.
+    assert arguments == ["-c", "print(42)"]
+    assert Path(program).stem == "python3"
     assert kwargs["cwd"] == drives.default
     # No shell means no shell injection: operators stay literal arguments.
     assert "shell" not in kwargs
@@ -149,7 +155,9 @@ def test_shell_operators_are_passed_through_as_literal_arguments(drives):
     with patch("emix.host.subprocess.run") as run:
         shell.execute("echo hi > /etc/passwd")
 
-    assert run.call_args[0][0] == ["echo", "hi", ">", "/etc/passwd"]
+    program, *arguments = run.call_args[0][0]
+    assert arguments == ["hi", ">", "/etc/passwd"]
+    assert Path(program).stem == "echo"
 
 
 def test_personalities_without_fallthrough_reject_unknown_verbs(drives):
